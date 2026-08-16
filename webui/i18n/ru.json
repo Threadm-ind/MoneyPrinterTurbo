@@ -225,6 +225,7 @@
     "Chatterbox Base URL Placeholder": "http://localhost:4123/v1",
     "Chatterbox Voices Placeholder": "default-Female, narrator-Male",
     "Hide Log": "Скрыть журнал",
+    "Simple Mode": "Простой режим",
     "Hide Basic Settings": "Скрыть основные настройки\n\nПанель основных настроек не будет показана на странице.\n\nЧтобы вернуть ее, установите `hide_config = false` в `config.toml`",
     "LLM Settings": "**Настройки LLM**",
     "LLM Settings Tab": "Настройки LLM",

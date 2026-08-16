@@ -236,6 +236,7 @@
     "tts_provider_tips.elevenlabs": "Requires an [API key](https://elevenlabs.io/app/settings/api-keys). Add voices to your favorites in the [Voice Library](https://elevenlabs.io/app/voice-library) first.",
     "tts_provider_tips.chatterbox": "Self-hosted. Run a compatible [Chatterbox TTS API](https://github.com/travisvn/chatterbox-tts-api), then enter a Base URL ending in `/v1`; the API key is usually optional.",
     "Hide Log": "Hide Log",
+    "Simple Mode": "Simple Mode",
     "Hide Basic Settings": "Hide Basic Settings\n\nHidden, the basic settings panel will not be displayed on the page.\n\nIf you need to display it again, please set `hide_config = false` in `config.toml`",
     "LLM Settings": "**LLM Settings**",
     "LLM Settings Tab": "LLM Settings",

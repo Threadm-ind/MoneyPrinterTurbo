@@ -229,6 +229,7 @@
     "Chatterbox Base URL Placeholder": "http://localhost:4123/v1",
     "Chatterbox Voices Placeholder": "default-Female, narrator-Male",
     "Hide Log": "Sembunyikan Log",
+    "Simple Mode": "Mode Sederhana",
     "Hide Basic Settings": "Sembunyikan Pengaturan Dasar\n\nTersembunyi, panel pengaturan dasar tidak akan ditampilkan di halaman.\n\nJika Anda perlu menampilkannya lagi, silakan atur `hide_config = false` di `config.toml`",
     "LLM Settings": "**Pengaturan LLM**",
     "LLM Settings Tab": "Pengaturan LLM",

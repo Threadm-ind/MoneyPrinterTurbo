@@ -229,6 +229,7 @@
     "Chatterbox Base URL Placeholder": "http://localhost:4123/v1",
     "Chatterbox Voices Placeholder": "default-Female, narrator-Male",
     "Hide Log": "Ẩn Nhật Ký",
+    "Simple Mode": "Chế độ đơn giản",
     "Hide Basic Settings": "Ẩn Cài Đặt Cơ Bản\n\nẨn, thanh cài đặt cơ bản sẽ không hiển thị trên trang web.\n\nNếu bạn muốn hiển thị lại, vui lòng đặt `hide_config = false` trong `config.toml`",
     "LLM Settings": "**Cài Đặt LLM**",
     "LLM Settings Tab": "Cài đặt LLM",

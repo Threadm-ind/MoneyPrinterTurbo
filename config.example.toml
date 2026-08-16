@@ -190,6 +190,15 @@ oneapi_model_name = ""
 # Providers: https://docs.litellm.ai/docs/providers
 litellm_model_name = ""
 
+# CLI Agent: generates text through a locally installed coding-agent CLI
+# (claude / grok / kimi) using its logged-in subscription — no API key.
+# command: which CLI to use; fallback_backends: comma-separated CLIs to try
+# if the first fails; timeout_seconds: hard limit per CLI invocation.
+# Not available inside Docker (the CLI binaries live on the host).
+cli_agent_command = ""
+cli_agent_fallback_backends = ""
+cli_agent_timeout_seconds = ""
+
 # Groq
 # API key: https://console.groq.com/keys
 groq_api_key = ""
@@ -356,6 +365,11 @@ voices = ["default-Female"]
 [ui]
 # Hide generation logs in the WebUI.
 hide_log = false
+
+# Simple mode: only show the script panel and the generate button; all other
+# parameters come from saved config and schema defaults.
+# 简洁模式：只显示文案面板和生成按钮，其余参数走已保存配置与默认值。
+simple_mode = false
 
 # Open the task folder automatically after video generation completes.
 # 视频生成完成后是否自动打开任务目录；关闭后仍可在任务管理中手动打开。

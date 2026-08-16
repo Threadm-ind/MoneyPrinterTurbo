@@ -1970,6 +1970,14 @@ def _render_settings_dialog():
             )
             _set_runtime_config("ui", "hide_log", hide_log)
 
+            # 简洁模式：只保留主题输入和生成按钮，其余参数走配置默认值。
+            simple_mode = st.checkbox(
+                tr("Simple Mode"),
+                value=config.ui.get("simple_mode", False),
+                key="simple_mode_checkbox",
+            )
+            _set_runtime_config("ui", "simple_mode", simple_mode)
+
         _render_cache_management_settings(cache_config_panel)
 
         # 中间面板 - LLM 设置
@@ -2512,7 +2520,7 @@ def _render_video_settings(panel, params):
             params.video_clip_duration = stable_selectbox(
                 tr("Clip Duration"),
                 options=[2, 3, 4, 5, 6, 7, 8, 9, 10],
-                default_value=3,
+                default_value=5,
                 key="video_clip_duration_select",
                 help=tr("Clip Duration Help"),
             )
@@ -4296,6 +4304,18 @@ def _render_generation_controls(
     return start_button
 
 
+def _apply_simple_mode_defaults(params):
+    """简洁模式下隐藏的控件不再填充参数，这里从配置补齐必需字段。
+
+    schema 已提供竖屏、随机拼接、5 秒片段、开启字幕等默认值；素材来源和
+    音色跟随配置，保证与完整模式最后一次保存的选择一致。
+    """
+    params.video_source = config.app.get("video_source", "pexels")
+    params.voice_name = config.ui.get("voice_name", "") or "en-GB-RyanNeural-Male"
+    params.bgm_type = "random"
+    return params
+
+
 def _render_application():
     """按固定顺序渲染顶部栏、弹窗、生成表单和任务结果。"""
     _render_top_bar()
@@ -4311,25 +4331,44 @@ def _render_application():
     if restore_applied or restore_succeeded:
         st.success(tr("Task Configuration Loaded"))
 
-    with st.container(key="main_settings_grid"):
-        panel = st.columns(4)
-    left_panel = panel[0]
-    middle_panel = panel[1]
-    audio_panel = panel[2]
-    right_panel = panel[3]
+    simple_mode = bool(config.ui.get("simple_mode", False))
+    if simple_mode:
+        # 简洁模式：只渲染文案面板，其余参数由配置和 schema 默认值提供。
+        with st.container(key="main_settings_grid"):
+            panel = st.columns([1, 1])
+        left_panel = panel[0]
 
-    params = VideoParams(video_subject="")
-    params.match_materials_to_script = bool(
-        st.session_state.get("match_materials_to_script", False)
-    )
-    _render_script_settings(left_panel, params)
+        params = VideoParams(video_subject="")
+        params.match_materials_to_script = bool(
+            st.session_state.get("match_materials_to_script", False)
+        )
+        _render_script_settings(left_panel, params)
+        _apply_simple_mode_defaults(params)
 
-    uploaded_files = _render_video_settings(middle_panel, params)
-    uploaded_audio_file, uploaded_bgm_file, voice_mode = _render_audio_settings(
-        audio_panel, params
-    )
+        uploaded_files = []
+        uploaded_audio_file = None
+        uploaded_bgm_file = None
+        voice_mode = VOICE_MODE_TTS
+    else:
+        with st.container(key="main_settings_grid"):
+            panel = st.columns(4)
+        left_panel = panel[0]
+        middle_panel = panel[1]
+        audio_panel = panel[2]
+        right_panel = panel[3]
 
-    _render_subtitle_settings(right_panel, params)
+        params = VideoParams(video_subject="")
+        params.match_materials_to_script = bool(
+            st.session_state.get("match_materials_to_script", False)
+        )
+        _render_script_settings(left_panel, params)
+
+        uploaded_files = _render_video_settings(middle_panel, params)
+        uploaded_audio_file, uploaded_bgm_file, voice_mode = _render_audio_settings(
+            audio_panel, params
+        )
+
+        _render_subtitle_settings(right_panel, params)
 
     generation_submitted = _render_generation_controls(
         params,

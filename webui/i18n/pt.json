@@ -229,6 +229,7 @@
     "Chatterbox Base URL Placeholder": "http://localhost:4123/v1",
     "Chatterbox Voices Placeholder": "default-Female, narrator-Male",
     "Hide Log": "Ocultar Log",
+    "Simple Mode": "Modo Simples",
     "Hide Basic Settings": "Ocultar Configurações Básicas\n\nOculto, o painel de configurações básicas não será exibido na página.\n\nSe precisar exibi-lo novamente, defina `hide_config = false` em `config.toml`",
     "LLM Settings": "**Configurações do LLM**",
     "LLM Settings Tab": "Configurações do LLM",

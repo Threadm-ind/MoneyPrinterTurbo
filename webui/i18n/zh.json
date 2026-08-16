@@ -236,6 +236,7 @@
     "tts_provider_tips.elevenlabs": "需要 [API Key](https://elevenlabs.io/app/settings/api-keys)；请先在 [Voice Library](https://elevenlabs.io/app/voice-library) 将音色加入收藏。",
     "tts_provider_tips.chatterbox": "自托管服务。运行兼容的 [Chatterbox TTS API](https://github.com/travisvn/chatterbox-tts-api)，并填写以 `/v1` 结尾的 Base URL；API Key 通常可选。",
     "Hide Log": "隐藏日志",
+    "Simple Mode": "简洁模式",
     "Hide Basic Settings": "隐藏基础设置\n\n隐藏后，基础设置面板将不会显示在页面中。\n\n如需要再次显示，请在 `config.toml` 中设置 `hide_config = false`",
     "LLM Settings": "**大模型设置**",
     "LLM Settings Tab": "大模型设置",
