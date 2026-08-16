@@ -237,6 +237,8 @@
     "tts_provider_tips.chatterbox": "Self-hosted. Run a compatible [Chatterbox TTS API](https://github.com/travisvn/chatterbox-tts-api), then enter a Base URL ending in `/v1`; the API key is usually optional.",
     "Hide Log": "Hide Log",
     "Simple Mode": "Simple Mode",
+    "Please Enter the KIE API Key": "Please set the KIE API key (kie_api_key in config.toml or the KIE_API_KEY environment variable)",
+    "KIE Generate": "KIE Generate (AI b-roll)",
     "Hide Basic Settings": "Hide Basic Settings\n\nHidden, the basic settings panel will not be displayed on the page.\n\nIf you need to display it again, please set `hide_config = false` in `config.toml`",
     "LLM Settings": "**LLM Settings**",
     "LLM Settings Tab": "LLM Settings",

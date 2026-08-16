@@ -49,6 +49,17 @@ pixabay_api_keys = []
 # Register at https://coverr.co/developers?ctx=header_navigation
 coverr_api_keys = []
 
+# KIE Generate: AI-generated b-roll instead of stock footage. Clips are
+# generated per script keyword with a KIE.ai video model. Credits are billed
+# per submitted clip; kie_max_clips caps the cost of one run. Submitted task
+# ids are persisted to <task_dir>/kie_tasks.json before polling.
+# Create a key at https://kie.ai (or set the KIE_API_KEY environment variable).
+kie_api_key = ""
+kie_video_model = "bytedance/seedance-2-fast"
+kie_max_clips = 3
+kie_poll_timeout = 600
+kie_fallback_to_pexels = true
+
 # Optional TwelveLabs integration for semantic material ranking and video QA.
 # Install the optional dependency with: uv sync --extra twelvelabs
 # Create an API key at https://playground.twelvelabs.io/

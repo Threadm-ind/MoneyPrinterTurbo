@@ -230,6 +230,8 @@
     "Chatterbox Voices Placeholder": "default-Female, narrator-Male",
     "Hide Log": "Ocultar Log",
     "Simple Mode": "Modo Simples",
+    "Please Enter the KIE API Key": "Defina a chave de API do KIE (kie_api_key no config.toml ou a variável de ambiente KIE_API_KEY)",
+    "KIE Generate": "Geração KIE (b-roll de IA)",
     "Hide Basic Settings": "Ocultar Configurações Básicas\n\nOculto, o painel de configurações básicas não será exibido na página.\n\nSe precisar exibi-lo novamente, defina `hide_config = false` em `config.toml`",
     "LLM Settings": "**Configurações do LLM**",
     "LLM Settings Tab": "Configurações do LLM",

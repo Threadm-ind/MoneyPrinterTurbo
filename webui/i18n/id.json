@@ -230,6 +230,8 @@
     "Chatterbox Voices Placeholder": "default-Female, narrator-Male",
     "Hide Log": "Sembunyikan Log",
     "Simple Mode": "Mode Sederhana",
+    "Please Enter the KIE API Key": "Silakan atur kunci API KIE (kie_api_key di config.toml atau variabel lingkungan KIE_API_KEY)",
+    "KIE Generate": "Generasi KIE (b-roll AI)",
     "Hide Basic Settings": "Sembunyikan Pengaturan Dasar\n\nTersembunyi, panel pengaturan dasar tidak akan ditampilkan di halaman.\n\nJika Anda perlu menampilkannya lagi, silakan atur `hide_config = false` di `config.toml`",
     "LLM Settings": "**Pengaturan LLM**",
     "LLM Settings Tab": "Pengaturan LLM",

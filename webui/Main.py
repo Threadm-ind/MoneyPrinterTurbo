@@ -42,7 +42,7 @@ from app.models.schema import (
     VideoTransitionMode,
 )
 from app.services import bgm as bgm_service
-from app.services import cache_manager, llm, video, voice, webui_task
+from app.services import cache_manager, kie_source, llm, video, voice, webui_task
 from app.services import elevenlabs_music as elevenlabs_music_service
 from app.services import sonilo as sonilo_service
 from app.services import state as sm
@@ -2415,6 +2415,7 @@ def _render_video_settings(panel, params):
                 (tr("Pexels"), "pexels"),
                 (tr("Pixabay"), "pixabay"),
                 (tr("Coverr"), "coverr"),
+                (tr("KIE Generate"), "kie"),
                 (tr("Local file"), "local"),
             ]
 
@@ -4110,7 +4111,7 @@ def _render_generation_controls(
             st.error(tr("Video Script and Subject Cannot Both Be Empty"))
             st.stop()
 
-        if params.video_source not in ["pexels", "pixabay", "coverr", "local"]:
+        if params.video_source not in ["pexels", "pixabay", "coverr", "kie", "local"]:
             _remove_active_generation_task(task_id)
             st.error(tr("Please Select a Valid Video Source"))
             st.stop()
@@ -4134,6 +4135,11 @@ def _render_generation_controls(
         ):
             _remove_active_generation_task(task_id)
             st.error(tr("Please Enter the Coverr API Key"))
+            st.stop()
+
+        if params.video_source == "kie" and not kie_source.is_enabled():
+            _remove_active_generation_task(task_id)
+            st.error(tr("Please Enter the KIE API Key"))
             st.stop()
 
         if (
