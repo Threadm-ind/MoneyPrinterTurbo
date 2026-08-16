@@ -13,6 +13,8 @@ class LLMProviderField:
     required: bool = False
     secret: bool = False
     default_value: str = ""
+    # 非空时 WebUI 渲染为下拉框而不是文本输入框。
+    choices: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,6 +238,29 @@ LLM_PROVIDER_REGISTRY = (
         requires_base_url=False,
         show_api_key=False,
         show_base_url=False,
+    ),
+    LLMProviderSpec(
+        "cli_agent",
+        "CLI Agent (claude / grok / kimi)",
+        adapter="cli_agent",
+        requires_api_key=False,
+        requires_model_name=False,
+        requires_base_url=False,
+        show_api_key=False,
+        show_base_url=False,
+        extra_fields=(
+            LLMProviderField(
+                "command",
+                "CLI Command",
+                required=True,
+                default_value="claude",
+                choices=("claude", "grok", "kimi"),
+            ),
+            LLMProviderField("fallback_backends", "CLI Fallback Backends"),
+            LLMProviderField(
+                "timeout_seconds", "CLI Timeout Seconds", default_value="90"
+            ),
+        ),
     ),
     # 其它推理与公共服务
     LLMProviderSpec(

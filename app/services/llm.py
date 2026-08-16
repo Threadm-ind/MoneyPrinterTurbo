@@ -213,6 +213,13 @@ def _generate_response(prompt: str, app_config=None) -> str:
                     "please set it in the config.toml file."
                 )
 
+        if adapter == "cli_agent":
+            from app.services.llm_cli_agent import generate_via_cli
+
+            return _normalize_text_response(
+                generate_via_cli(prompt, extra_values), llm_provider
+            )
+
         if adapter == "qwen":
             import dashscope
             from dashscope.api_entities.dashscope_response import GenerationResponse

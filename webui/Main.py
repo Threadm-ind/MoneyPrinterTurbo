@@ -2122,12 +2122,29 @@ def _render_settings_dialog():
             # 需要 Account ID；以后新增类似字段时无需再在 Main.py 增加判断。
             for field in llm_provider_spec.extra_fields:
                 field_config_key = llm_provider_spec.config_key(field.config_suffix)
-                field_value = llm_form_panel.text_input(
-                    tr(field.label_key),
-                    value=(config.app.get(field_config_key, "") or field.default_value),
-                    type="password" if field.secret else "default",
-                    key=f"{llm_provider}_{field.config_suffix}_input",
-                )
+                if field.choices:
+                    saved_choice = (
+                        config.app.get(field_config_key, "") or field.default_value
+                    )
+                    field_value = llm_form_panel.selectbox(
+                        tr(field.label_key),
+                        options=list(field.choices),
+                        index=(
+                            list(field.choices).index(saved_choice)
+                            if saved_choice in field.choices
+                            else 0
+                        ),
+                        key=f"{llm_provider}_{field.config_suffix}_input",
+                    )
+                else:
+                    field_value = llm_form_panel.text_input(
+                        tr(field.label_key),
+                        value=(
+                            config.app.get(field_config_key, "") or field.default_value
+                        ),
+                        type="password" if field.secret else "default",
+                        key=f"{llm_provider}_{field.config_suffix}_input",
+                    )
                 _set_runtime_config(
                     "app",
                     field_config_key,
@@ -2961,9 +2978,7 @@ def _sync_minimax_tts_api_key_input():
     widget_key = "minimax_tts_api_key_input"
     configured_key = str(config.minimax_tts.get("api_key", "") or "").strip()
     shared_key = str(
-        config.app.get("minimax_api_key", "")
-        or os.getenv("MINIMAX_API_KEY", "")
-        or ""
+        config.app.get("minimax_api_key", "") or os.getenv("MINIMAX_API_KEY", "") or ""
     ).strip()
     effective_key = configured_key or shared_key
     had_widget_state = widget_key in st.session_state
@@ -3031,7 +3046,9 @@ def _render_minimax_tts_settings() -> tuple[list[str], dict[str, str]]:
     if dedicated_key:
         _set_runtime_config("minimax_tts", "base_url", minimax_tts_base_url)
 
-    configured_model = config.minimax_tts.get("model_id", voice.MINIMAX_TTS_DEFAULT_MODEL)
+    configured_model = config.minimax_tts.get(
+        "model_id", voice.MINIMAX_TTS_DEFAULT_MODEL
+    )
     if configured_model not in voice.MINIMAX_TTS_MODELS:
         configured_model = voice.MINIMAX_TTS_DEFAULT_MODEL
     minimax_tts_model = stable_selectbox(
@@ -3065,9 +3082,7 @@ def _render_minimax_tts_settings() -> tuple[list[str], dict[str, str]]:
                 minimax_tts_base_url,
                 available_voices,
             )
-            st.success(
-                tr("MiniMax Voices Loaded").format(count=len(available_voices))
-            )
+            st.success(tr("MiniMax Voices Loaded").format(count=len(available_voices)))
 
     available_voices = _get_cached_minimax_voices(
         effective_api_key,
@@ -3441,9 +3456,7 @@ def _render_audio_settings(panel, params):
             minimax_voices = []
             minimax_voice_labels = {}
             if tts_mode_enabled and selected_tts_server == "minimax-tts":
-                minimax_voices, minimax_voice_labels = (
-                    _render_minimax_tts_settings()
-                )
+                minimax_voices, minimax_voice_labels = _render_minimax_tts_settings()
 
             # 根据选择的TTS服务器获取声音列表
             filtered_voices = []

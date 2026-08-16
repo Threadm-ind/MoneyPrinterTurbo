@@ -314,6 +314,7 @@ class TestLiteLLMProvider(unittest.TestCase):
                 "ollama",
                 "oneapi",
                 "litellm",
+                "cli_agent",
                 "groq",
                 "pollinations",
             ],
