@@ -25,6 +25,8 @@ DEFAULT_MODEL = "bytedance/seedance-2-fast"
 DEFAULT_MAX_CLIPS = 3
 DEFAULT_POLL_TIMEOUT = 600
 POLL_INTERVAL_SECONDS = 15
+DEFAULT_RESOLUTION = "720p"
+ALLOWED_RESOLUTIONS = ("480p", "720p")
 
 # 追加到关键词后的固定风格后缀，保证素材是干净的 b-roll。
 PROMPT_SUFFIX = (
@@ -71,14 +73,30 @@ def _persist_tasks(task_id: str, records: list) -> None:
         logger.warning(f"failed to persist kie task ids: {e}")
 
 
-def _submit_task(prompt: str, model: str, aspect_ratio: str, duration: int) -> str:
+def _get_resolution() -> str:
+    """kie_resolution 配置项：480p 更省积分，720p 画质更好（默认）。"""
+    resolution = str(config.app.get("kie_resolution", "") or "").strip().lower()
+    if not resolution:
+        return DEFAULT_RESOLUTION
+    if resolution not in ALLOWED_RESOLUTIONS:
+        logger.warning(
+            f"kie_resolution '{resolution}' is not one of {ALLOWED_RESOLUTIONS}, "
+            f"falling back to {DEFAULT_RESOLUTION}"
+        )
+        return DEFAULT_RESOLUTION
+    return resolution
+
+
+def _submit_task(
+    prompt: str, model: str, aspect_ratio: str, duration: int, resolution: str
+) -> str:
     payload = {
         "model": model,
         "input": {
             "prompt": prompt,
             "aspect_ratio": aspect_ratio,
             "duration": duration,
-            "resolution": "720p",
+            "resolution": resolution,
             # 成片使用 TTS 配音和独立 BGM，素材自带音轨只会被丢弃。
             "generate_audio": False,
         },
@@ -133,6 +151,7 @@ def generate_videos(
         poll_timeout = DEFAULT_POLL_TIMEOUT
 
     aspect_ratio = _aspect_ratio_value(video_aspect)
+    resolution = _get_resolution()
     # seedance 支持 4-15 秒；拼接阶段会按 max_clip_duration 截取。
     duration = max(4, min(15, int(max_clip_duration or 5)))
 
@@ -149,14 +168,16 @@ def generate_videos(
 
     logger.info(
         f"kie source: generating {len(terms)} clip(s) with {model}, "
-        f"{aspect_ratio}, {duration}s each"
+        f"{aspect_ratio}, {duration}s each, {resolution}"
     )
 
     records = []
     for term in terms:
         prompt = f"{term}{PROMPT_SUFFIX}"
         try:
-            kie_task_id = _submit_task(prompt, model, aspect_ratio, duration)
+            kie_task_id = _submit_task(
+                prompt, model, aspect_ratio, duration, resolution
+            )
         except Exception as e:
             logger.error(
                 "kie submit failed for "

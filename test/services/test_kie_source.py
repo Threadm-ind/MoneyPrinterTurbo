@@ -148,6 +148,42 @@ class TestKieGenerateVideos(unittest.TestCase):
         self.assertEqual(mock_post.call_args.kwargs["json"]["input"]["duration"], 4)
 
 
+class TestKieResolution(unittest.TestCase):
+    def _submit_with_resolution(self, configured):
+        with (
+            patch.object(kie_source, "_get_api_key", return_value="test-key"),
+            patch.object(kie_source.material, "_get_tls_verify", return_value=True),
+            patch.object(
+                kie_source.utils, "task_dir", return_value="/tmp/kie-test-task"
+            ),
+            patch.object(kie_source, "_persist_tasks"),
+            patch.object(kie_source.time, "sleep"),
+            patch.object(
+                kie_source.config.app,
+                "get",
+                side_effect=lambda k, d=None: {"kie_resolution": configured}.get(k, d),
+            ),
+            patch.object(
+                kie_source.requests, "post", return_value=_submit_ok()
+            ) as mock_post,
+            patch.object(kie_source.requests, "get", return_value=_poll_success(["u"])),
+            patch.object(kie_source.material, "save_video", return_value="/tmp/x.mp4"),
+        ):
+            kie_source.generate_videos(
+                "task-1", ["ocean"], VideoAspect.portrait, 5.0, 5
+            )
+        return mock_post.call_args.kwargs["json"]["input"]["resolution"]
+
+    def test_default_is_720p(self):
+        self.assertEqual(self._submit_with_resolution(""), "720p")
+
+    def test_480p_passthrough(self):
+        self.assertEqual(self._submit_with_resolution("480p"), "480p")
+
+    def test_invalid_value_falls_back_to_default(self):
+        self.assertEqual(self._submit_with_resolution("1080p"), "720p")
+
+
 class TestKieEnablement(unittest.TestCase):
     def test_missing_key_returns_empty(self):
         with patch.object(kie_source, "_get_api_key", return_value=""):
