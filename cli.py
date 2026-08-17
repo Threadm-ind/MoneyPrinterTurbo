@@ -57,14 +57,18 @@ def _paragraph_count(value: str) -> int:
 def _non_negative_float(value: str) -> float:
     parsed = float(value)
     if not math.isfinite(parsed) or parsed < 0:
-        raise argparse.ArgumentTypeError(f"value must be a finite number >= 0, got {value!r}")
+        raise argparse.ArgumentTypeError(
+            f"value must be a finite number >= 0, got {value!r}"
+        )
     return parsed
 
 
 def _positive_float(value: str) -> float:
     parsed = float(value)
     if not math.isfinite(parsed) or parsed <= 0:
-        raise argparse.ArgumentTypeError(f"value must be a finite number > 0, got {value!r}")
+        raise argparse.ArgumentTypeError(
+            f"value must be a finite number > 0, got {value!r}"
+        )
     return parsed
 
 
@@ -187,9 +191,7 @@ Output and exit status:
     content_group.add_argument(
         "--video-language",
         default=None,
-        help=(
-            "script language code, such as zh-CN or en-US (default: auto-detect)"
-        ),
+        help=("script language code, such as zh-CN or en-US (default: auto-detect)"),
     )
     content_group.add_argument(
         "--paragraph-number",
@@ -212,8 +214,8 @@ Output and exit status:
     material_group.add_argument(
         "--video-source",
         default="pexels",
-        choices=["pexels", "pixabay", "coverr", "local"],
-        help="video material provider; online providers require matching API keys in config.toml",
+        choices=["pexels", "pixabay", "coverr", "kie", "imagine", "local"],
+        help="video material provider; imagine uses grok CLI login or XAI_API_KEY",
     )
     material_group.add_argument(
         "--video-materials",
@@ -295,17 +297,13 @@ Output and exit status:
         "--voice-volume",
         type=_non_negative_float,
         default=None,
-        help=(
-            "final voiceover volume multiplier, a finite number >= 0 (default: 1.0)"
-        ),
+        help=("final voiceover volume multiplier, a finite number >= 0 (default: 1.0)"),
     )
     audio_group.add_argument(
         "--voice-rate",
         type=_positive_float,
         default=None,
-        help=(
-            "speech rate multiplier, a finite number > 0 (default: 1.0)"
-        ),
+        help=("speech rate multiplier, a finite number > 0 (default: 1.0)"),
     )
     audio_group.add_argument(
         "--custom-audio-file",
@@ -357,16 +355,14 @@ Output and exit status:
         default=True,
         action=argparse.BooleanOptionalAction,
         help=(
-            "enable subtitles; use --no-subtitle-enabled to disable "
-            "(default: enabled)"
+            "enable subtitles; use --no-subtitle-enabled to disable (default: enabled)"
         ),
     )
     subtitle_group.add_argument(
         "--font-name",
         default=None,
         help=(
-            "subtitle font filename inside resource/fonts "
-            "(default: STHeitiMedium.ttc)"
+            "subtitle font filename inside resource/fonts (default: STHeitiMedium.ttc)"
         ),
     )
     subtitle_group.add_argument(
@@ -413,9 +409,7 @@ Output and exit status:
         "--stroke-width",
         type=_non_negative_float,
         default=None,
-        help=(
-            "subtitle outline width, a finite number >= 0 (default: 1.5)"
-        ),
+        help=("subtitle outline width, a finite number >= 0 (default: 1.5)"),
     )
     subtitle_group.add_argument(
         "--subtitle-background-enabled",
@@ -459,7 +453,11 @@ Output and exit status:
 
     stage_requires_materials = args.stop_at in {"materials", "video"}
     has_video_materials = bool((args.video_materials or "").strip())
-    if args.video_source == "local" and stage_requires_materials and not has_video_materials:
+    if (
+        args.video_source == "local"
+        and stage_requires_materials
+        and not has_video_materials
+    ):
         parser.error(
             "--video-materials is required with --video-source local when "
             "--stop-at is materials or video"
@@ -596,7 +594,11 @@ def _resolve_cli_file(
         else os.path.join(os.getcwd(), expanded_path)
     )
     resolved_path = os.path.realpath(candidate)
-    if not os.path.isfile(resolved_path) and fallback_dir and not os.path.isabs(expanded_path):
+    if (
+        not os.path.isfile(resolved_path)
+        and fallback_dir
+        and not os.path.isabs(expanded_path)
+    ):
         resolved_path = os.path.realpath(os.path.join(fallback_dir, expanded_path))
 
     if not os.path.isfile(resolved_path):
@@ -638,9 +640,7 @@ def _resolve_managed_resource_file(
             resolved_path, resource_dir
         ):
             return resolved_path
-    raise ValueError(
-        f"{description} file must exist inside {resource_dir}: {raw_path}"
-    )
+    raise ValueError(f"{description} file must exist inside {resource_dir}: {raw_path}")
 
 
 def prepare_cli_files(params: VideoParams, stop_at: str) -> None:
@@ -693,9 +693,7 @@ def prepare_cli_files(params: VideoParams, stop_at: str) -> None:
                 # 维护白名单。
                 params.bgm_file = bgm_service.resolve_bgm_file(params.bgm_file)
             except ValueError as exc:
-                supported_extensions = ", ".join(
-                    bgm_service.SUPPORTED_BGM_EXTENSIONS
-                )
+                supported_extensions = ", ".join(bgm_service.SUPPORTED_BGM_EXTENSIONS)
                 raise ValueError(
                     "background music must be a supported audio file inside "
                     f"storage/bgm or resource/songs ({supported_extensions}): "

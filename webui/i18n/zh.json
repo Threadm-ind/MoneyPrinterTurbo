@@ -239,6 +239,8 @@
     "Simple Mode": "简洁模式",
     "Please Enter the KIE API Key": "请先配置 KIE API 密钥（config.toml 的 kie_api_key 或环境变量 KIE_API_KEY）",
     "KIE Generate": "KIE 生成（AI 素材）",
+    "Grok Imagine": "Grok Imagine（AI 素材）",
+    "Please Sign In to Grok CLI": "请先运行 `grok login` 登录，或设置 imagine_api_key / XAI_API_KEY，才能使用 Grok Imagine",
     "Hide Basic Settings": "隐藏基础设置\n\n隐藏后，基础设置面板将不会显示在页面中。\n\n如需要再次显示，请在 `config.toml` 中设置 `hide_config = false`",
     "LLM Settings": "**大模型设置**",
     "LLM Settings Tab": "大模型设置",

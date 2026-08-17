@@ -17,6 +17,7 @@ from app.models.schema import VideoConcatMode, VideoParams
 from app.services import bgm as bgm_service
 from app.services import (
     elevenlabs_music,
+    imagine_source,
     kie_source,
     llm,
     material,
@@ -598,6 +599,29 @@ def get_video_materials(task_id, params, video_terms, audio_duration):
             task_id,
             "materials",
             "failed to generate video materials with kie",
+        )
+        return None
+    elif params.video_source == "imagine":
+        logger.info("\n\n## generating b-roll videos with grok imagine")
+        generated_videos = imagine_source.generate_videos(
+            task_id=task_id,
+            search_terms=video_terms,
+            video_aspect=params.video_aspect,
+            audio_duration=audio_duration * params.video_count,
+            max_clip_duration=params.video_clip_duration,
+        )
+        if generated_videos:
+            return generated_videos
+        if config.app.get("imagine_fallback_to_pexels", True) and config.app.get(
+            "pexels_api_keys", ""
+        ):
+            logger.warning("imagine generation failed; falling back to pexels stock")
+            params = params.copy(update={"video_source": "pexels"})
+            return get_video_materials(task_id, params, video_terms, audio_duration)
+        _mark_task_failed(
+            task_id,
+            "materials",
+            "failed to generate video materials with grok imagine",
         )
         return None
     else:

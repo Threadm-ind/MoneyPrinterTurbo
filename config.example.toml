@@ -33,7 +33,7 @@ tls_verify = true
 # Video Materials / 视频素材
 # -----------------------------------------------------------------------------
 
-# Available values: "pexels", "pixabay", "coverr", "local".
+# Available values: "pexels", "pixabay", "coverr", "imagine", "kie", "local".
 video_source = "pexels"
 
 # API key lists support key rotation. Use straight ASCII double quotes and
@@ -62,6 +62,17 @@ kie_fallback_to_pexels = true
 # Clip resolution: "480p" burns fewer credits per clip, "720p" looks better.
 # 480p 更省积分，720p 画质更好。
 kie_resolution = "720p"
+
+# Grok Imagine: AI b-roll via the xAI video API. Auth is the local `grok`
+# CLI login (~/.grok/auth.json) unless imagine_api_key / XAI_API_KEY is set.
+# request ids are persisted to <task_dir>/imagine_tasks.json before polling.
+imagine_api_key = ""
+imagine_video_model = "grok-imagine-video-1.5"
+imagine_max_clips = 3
+imagine_poll_timeout = 600
+imagine_fallback_to_pexels = true
+# 480p burns fewer credits; 720p / 1080p look better (1080p needs 1.5).
+imagine_resolution = "480p"
 
 # Optional TwelveLabs integration for semantic material ranking and video QA.
 # Install the optional dependency with: uv sync --extra twelvelabs

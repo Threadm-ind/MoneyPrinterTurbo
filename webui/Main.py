@@ -44,6 +44,7 @@ from app.models.schema import (
 from app.services import bgm as bgm_service
 from app.services import (
     cache_manager,
+    imagine_source,
     kie_source,
     llm,
     trend_picker,
@@ -2514,6 +2515,7 @@ def _render_video_settings(panel, params):
                 (tr("Pexels"), "pexels"),
                 (tr("Pixabay"), "pixabay"),
                 (tr("Coverr"), "coverr"),
+                (tr("Grok Imagine"), "imagine"),
                 (tr("KIE Generate"), "kie"),
                 (tr("Local file"), "local"),
             ]
@@ -4210,7 +4212,14 @@ def _render_generation_controls(
             st.error(tr("Video Script and Subject Cannot Both Be Empty"))
             st.stop()
 
-        if params.video_source not in ["pexels", "pixabay", "coverr", "kie", "local"]:
+        if params.video_source not in [
+            "pexels",
+            "pixabay",
+            "coverr",
+            "imagine",
+            "kie",
+            "local",
+        ]:
             _remove_active_generation_task(task_id)
             st.error(tr("Please Select a Valid Video Source"))
             st.stop()
@@ -4239,6 +4248,11 @@ def _render_generation_controls(
         if params.video_source == "kie" and not kie_source.is_enabled():
             _remove_active_generation_task(task_id)
             st.error(tr("Please Enter the KIE API Key"))
+            st.stop()
+
+        if params.video_source == "imagine" and not imagine_source.is_enabled():
+            _remove_active_generation_task(task_id)
+            st.error(tr("Please Sign In to Grok CLI"))
             st.stop()
 
         if (

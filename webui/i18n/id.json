@@ -232,6 +232,8 @@
     "Simple Mode": "Mode Sederhana",
     "Please Enter the KIE API Key": "Silakan atur kunci API KIE (kie_api_key di config.toml atau variabel lingkungan KIE_API_KEY)",
     "KIE Generate": "Generasi KIE (b-roll AI)",
+    "Grok Imagine": "Grok Imagine (b-roll AI)",
+    "Please Sign In to Grok CLI": "Masuk dengan `grok login` atau setel imagine_api_key / XAI_API_KEY untuk memakai Grok Imagine",
     "Hide Basic Settings": "Sembunyikan Pengaturan Dasar\n\nTersembunyi, panel pengaturan dasar tidak akan ditampilkan di halaman.\n\nJika Anda perlu menampilkannya lagi, silakan atur `hide_config = false` di `config.toml`",
     "LLM Settings": "**Pengaturan LLM**",
     "LLM Settings Tab": "Pengaturan LLM",

@@ -230,6 +230,8 @@
     "Simple Mode": "Basit Mod",
     "Please Enter the KIE API Key": "Lütfen KIE API anahtarını ayarlayın (config.toml içinde kie_api_key veya KIE_API_KEY ortam değişkeni)",
     "KIE Generate": "KIE Üretimi (YZ b-roll)",
+    "Grok Imagine": "Grok Imagine (YZ b-roll)",
+    "Please Sign In to Grok CLI": "Grok Imagine için `grok login` ile oturum açın veya imagine_api_key / XAI_API_KEY ayarlayın",
     "Hide Basic Settings": "Temel Ayarları Gizle\n\nGizlendiği takdirde, temel ayarlar paneli sayfada görüntülenmeyecektir.\n\nTekrar görüntülemek için `config.toml` dosyasında `hide_config = false` olarak ayarlayın",
     "LLM Settings": "**LLM Ayarları**",
     "LLM Settings Tab": "LLM Ayarları",
