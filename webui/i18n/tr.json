@@ -284,6 +284,13 @@
     "Please Enter the Coverr API Key": "Lütfen **Coverr API Anahtarını** girin",
     "Video Encoder": "Video Kodlayıcı",
     "Default Video Encoder": "Varsayılan (Önerilen)",
-    "Video Encoder Help": "Gelişmiş seçenek. Varsayılan, uygulamanın kararlı kodlayıcı politikasını izler; şu anda libx264 kullanılır. Donanım kodlayıcı kullanılamıyorsa uygulama otomatik olarak libx264'e döner."
+    "Video Encoder Help": "Gelişmiş seçenek. Varsayılan, uygulamanın kararlı kodlayıcı politikasını izler; şu anda libx264 kullanılır. Donanım kodlayıcı kullanılamıyorsa uygulama otomatik olarak libx264'e döner.",
+    "Find Today's Best Bet": "Bugünün En İyi Bahsini Bul",
+    "Finding Today's Best Bet": "Bugünün en iyi bahsi aranıyor — canlı trendler çekiliyor ve senaryo yazılıyor...",
+    "Best Bet Failed": "En iyi bahis araması başarısız oldu",
+    "Best Bet Ready": "En iyi bahis hazır — inceleyin ve Oluştur'a basın",
+    "Why This Topic": "Bu konu neden",
+    "Best Bet Evidence Intro": "Az önce toplanan canlı sinyallerden seçildi",
+    "Runner Ups": "Yedekler"
   }
 }

@@ -284,6 +284,13 @@
     "Please Enter the Coverr API Key": "Silakan Masukkan **Kunci API Coverr**",
     "Video Encoder": "Encoder Video",
     "Default Video Encoder": "Default (Direkomendasikan)",
-    "Video Encoder Help": "Opsi lanjutan. Default mengikuti kebijakan encoder stabil aplikasi, saat ini libx264. Jika encoder perangkat keras tidak tersedia, aplikasi otomatis kembali ke libx264."
+    "Video Encoder Help": "Opsi lanjutan. Default mengikuti kebijakan encoder stabil aplikasi, saat ini libx264. Jika encoder perangkat keras tidak tersedia, aplikasi otomatis kembali ke libx264.",
+    "Find Today's Best Bet": "Cari Taruhan Terbaik Hari Ini",
+    "Finding Today's Best Bet": "Mencari taruhan terbaik hari ini — mengambil tren langsung dan menulis skrip...",
+    "Best Bet Failed": "Pencarian taruhan terbaik gagal",
+    "Best Bet Ready": "Taruhan terbaik siap — tinjau lalu tekan Hasilkan",
+    "Why This Topic": "Mengapa topik ini",
+    "Best Bet Evidence Intro": "Dipilih dari sinyal langsung yang baru diambil",
+    "Runner Ups": "Alternatif"
   }
 }

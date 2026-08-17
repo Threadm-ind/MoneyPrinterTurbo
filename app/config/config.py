@@ -217,9 +217,7 @@ def _run_deferred_config_flush():
 
     while True:
         with _config_save_lock:
-            flush_succeeded = _flush_pending_config_locked(
-                suppress_save_errors=True
-            )
+            flush_succeeded = _flush_pending_config_locked(suppress_save_errors=True)
 
         with _pending_config_lock:
             has_pending_work = bool(
@@ -521,6 +519,8 @@ siliconflow = _SynchronizedConfig(_cfg.get("siliconflow", {}))
 minimax_tts = _SynchronizedConfig(_cfg.get("minimax_tts", {}))
 elevenlabs = _SynchronizedConfig(_cfg.get("elevenlabs", {}))
 chatterbox = _SynchronizedConfig(_cfg.get("chatterbox", {}))
+# 最佳选题拾取器：只读配置，UI 不写回，无需同步字典。
+trend_picker = _cfg.get("trend_picker", {})
 ui = _SynchronizedConfig(
     _cfg.get(
         "ui",

@@ -284,6 +284,13 @@
     "Video Source Settings": "**Videoquellen-Einstellungen**",
     "Coverr": "Coverr",
     "Coverr API Key": "Coverr API-Schlüssel ([API-Schlüssel holen](https://coverr.co/developers?ctx=header_navigation))",
-    "Please Enter the Coverr API Key": "Bitte geben Sie den **Coverr API-Schlüssel** ein"
+    "Please Enter the Coverr API Key": "Bitte geben Sie den **Coverr API-Schlüssel** ein",
+    "Find Today's Best Bet": "Heutige beste Wette finden",
+    "Finding Today's Best Bet": "Heutige beste Wette wird gesucht — Live-Trends werden geladen und das Skript geschrieben...",
+    "Best Bet Failed": "Beste-Wette-Suche fehlgeschlagen",
+    "Best Bet Ready": "Beste Wette bereit — prüfen und Generieren drücken",
+    "Why This Topic": "Warum dieses Thema",
+    "Best Bet Evidence Intro": "Ausgewählt aus soeben erfassten Live-Signalen",
+    "Runner Ups": "Alternativen"
   }
 }

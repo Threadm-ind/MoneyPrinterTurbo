@@ -59,6 +59,9 @@ kie_video_model = "bytedance/seedance-2-fast"
 kie_max_clips = 3
 kie_poll_timeout = 600
 kie_fallback_to_pexels = true
+# Clip resolution: "480p" burns fewer credits per clip, "720p" looks better.
+# 480p 更省积分，720p 画质更好。
+kie_resolution = "720p"
 
 # Optional TwelveLabs integration for semantic material ranking and video QA.
 # Install the optional dependency with: uv sync --extra twelvelabs
@@ -368,6 +371,25 @@ api_key = ""
 model_id = "chatterbox"
 # Voice names exposed by the configured Chatterbox server.
 voices = ["default-Female"]
+
+# =============================================================================
+# Best-Bet Topic Picker / 最佳选题拾取器
+# =============================================================================
+
+[trend_picker]
+# Pulls live signals (Reddit rising + Google Trends RSS, both free and
+# keyless), then asks the configured LLM to pick one executable topic for a
+# faceless short. It is a best bet with evidence, never a guarantee.
+# Niche descriptions the picker must stay inside (reframing is allowed).
+niches = ["personal finance and money facts", "the economics of owning expensive things"]
+# Subreddits polled for rising posts.
+subreddits = ["personalfinance", "UKPersonalFinance", "investing", "FluentInFinance", "povertyfinance"]
+# Google Trends geography (US audiences carry the highest ad RPM).
+geo = "US"
+# TikTok Creator Rewards only pays on videos longer than 1 minute.
+target_duration_seconds = 65
+# Cap on how many raw signals are sent to the LLM for scoring.
+max_candidates = 40
 
 # =============================================================================
 # WebUI Preferences / WebUI 偏好

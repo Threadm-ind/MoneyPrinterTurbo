@@ -284,6 +284,13 @@
     "Please Enter the Coverr API Key": "Por favor, insira a **Chave de API do Coverr**",
     "Video Encoder": "Codificador de vídeo",
     "Default Video Encoder": "Padrão (recomendado)",
-    "Video Encoder Help": "Opção avançada. Padrão segue a política estável do aplicativo, atualmente libx264. Se um codificador de hardware não estiver disponível, o aplicativo retorna automaticamente para libx264."
+    "Video Encoder Help": "Opção avançada. Padrão segue a política estável do aplicativo, atualmente libx264. Se um codificador de hardware não estiver disponível, o aplicativo retorna automaticamente para libx264.",
+    "Find Today's Best Bet": "Encontrar a melhor aposta de hoje",
+    "Finding Today's Best Bet": "Buscando a melhor aposta de hoje — coletando tendências ao vivo e escrevendo o roteiro...",
+    "Best Bet Failed": "Falha ao buscar a melhor aposta",
+    "Best Bet Ready": "Melhor aposta pronta — revise e clique em Gerar",
+    "Why This Topic": "Por que este tema",
+    "Best Bet Evidence Intro": "Escolhido de sinais ao vivo recém-coletados",
+    "Runner Ups": "Alternativas"
   }
 }

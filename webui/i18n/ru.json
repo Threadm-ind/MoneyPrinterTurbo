@@ -284,6 +284,13 @@
     "Custom Position (% from top)": "Пользовательское положение (% от верхнего края)",
     "Please enter a value between 0 and 100": "Введите значение от 0 до 100",
     "Please enter a valid number": "Введите корректное число",
-    "Please Select a Valid Video Source": "Выберите поддерживаемый источник материалов"
+    "Please Select a Valid Video Source": "Выберите поддерживаемый источник материалов",
+    "Find Today's Best Bet": "Найти лучшую ставку дня",
+    "Finding Today's Best Bet": "Ищем лучшую ставку дня — собираем живые тренды и пишем сценарий...",
+    "Best Bet Failed": "Не удалось найти лучшую ставку",
+    "Best Bet Ready": "Лучшая ставка готова — проверьте и нажмите «Создать»",
+    "Why This Topic": "Почему эта тема",
+    "Best Bet Evidence Intro": "Выбрано из только что собранных живых сигналов",
+    "Runner Ups": "Запасные варианты"
   }
 }

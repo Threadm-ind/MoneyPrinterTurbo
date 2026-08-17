@@ -42,7 +42,15 @@ from app.models.schema import (
     VideoTransitionMode,
 )
 from app.services import bgm as bgm_service
-from app.services import cache_manager, kie_source, llm, video, voice, webui_task
+from app.services import (
+    cache_manager,
+    kie_source,
+    llm,
+    trend_picker,
+    video,
+    voice,
+    webui_task,
+)
 from app.services import elevenlabs_music as elevenlabs_music_service
 from app.services import sonilo as sonilo_service
 from app.services import state as sm
@@ -2229,12 +2237,103 @@ def _render_settings_dialog():
 # 主生成表单：文案、视频、音频与字幕面板
 # -----------------------------------------------------------------------------
 
+# 目标时长 65 秒对应约 180-220 词的旁白，三段结构最稳。
+BEST_BET_PARAGRAPH_NUMBER = 3
+
+
+def _run_best_bet_pipeline(app_config_snapshot):
+    """选题 -> 文案 -> 关键词 一条龙；任何一步失败都抛异常给按钮层展示。"""
+    best = trend_picker.pick_best_bet(app_config=app_config_snapshot)
+    duration = best.get("target_duration_seconds", 65)
+    prompt_parts = []
+    if best.get("hook"):
+        prompt_parts.append(f"Open with this hook: {best['hook']}")
+    if best.get("script_brief"):
+        prompt_parts.append(best["script_brief"])
+    prompt_parts.append(
+        f"Write enough narration to run at least {duration} seconds when read "
+        "aloud (about 180-220 words)."
+    )
+    script_prompt = " ".join(prompt_parts)[: llm.MAX_SCRIPT_PROMPT_LENGTH]
+
+    script = llm.generate_script(
+        video_subject=best["subject"],
+        language=st.session_state.get("script_language_select", ""),
+        paragraph_number=BEST_BET_PARAGRAPH_NUMBER,
+        video_script_prompt=script_prompt,
+        app_config=app_config_snapshot,
+    )
+    if "Error: " in script:
+        raise RuntimeError(script)
+
+    match_script = bool(st.session_state.get("match_materials_to_script", False))
+    terms = llm.generate_terms(
+        best["subject"],
+        script,
+        amount=8 if match_script else 5,
+        match_script_order=match_script,
+        app_config=app_config_snapshot,
+    )
+    if isinstance(terms, str) and "Error: " in terms:
+        raise RuntimeError(terms)
+    return best, script, terms, script_prompt
+
+
+def _render_best_bet_controls():
+    """最佳选题按钮 + 证据折叠区。
+
+    必须渲染在 video_subject 等控件之前：Streamlit 不允许在控件实例化后
+    修改同名 session_state，按钮先执行才能合法填充下方所有字段。
+    """
+    if st.button(
+        tr("Find Today's Best Bet"),
+        key="find_best_bet",
+        use_container_width=True,
+        type="primary",
+        icon=":material/target:",
+    ):
+        with st.spinner(tr("Finding Today's Best Bet")):
+            try:
+                best, script, terms, script_prompt = _run_llm_read_operation(
+                    "pick_best_bet", _run_best_bet_pipeline
+                )
+            except Exception as e:
+                st.session_state.pop("best_bet_result", None)
+                st.error(f"{tr('Best Bet Failed')}: {e}")
+            else:
+                st.session_state["video_subject"] = best["subject"]
+                st.session_state["video_script"] = script
+                st.session_state["video_terms"] = ", ".join(terms)
+                st.session_state["video_script_prompt"] = script_prompt
+                st.session_state["paragraph_number_input"] = BEST_BET_PARAGRAPH_NUMBER
+                st.session_state["best_bet_result"] = best
+                st.toast(tr("Best Bet Ready"))
+
+    best_bet = st.session_state.get("best_bet_result")
+    if not best_bet:
+        return
+    with st.expander(tr("Why This Topic"), expanded=False):
+        st.caption(
+            f"{tr('Best Bet Evidence Intro')} ({best_bet.get('candidate_count', 0)})"
+        )
+        if best_bet.get("why"):
+            st.write(best_bet["why"])
+        for evidence in best_bet.get("evidence", []):
+            title, url = evidence.get("title", ""), evidence.get("url", "")
+            label = f"[{title}]({url})" if url else title
+            st.markdown(f"- {label} — {evidence['source']}; {evidence['signal']}")
+        if best_bet.get("runner_ups"):
+            st.caption(tr("Runner Ups") + ": " + " | ".join(best_bet["runner_ups"]))
+        if best_bet.get("source_errors"):
+            st.caption("⚠ " + "; ".join(best_bet["source_errors"]))
+
 
 def _render_script_settings(panel, params):
     """渲染文案设置并更新生成参数。"""
     with panel:
         with st.container(border=True):
             st.write(tr("Video Script Settings"))
+            _render_best_bet_controls()
             params.video_subject = st.text_area(
                 tr("Video Subject"),
                 placeholder=tr("Video Subject Placeholder"),

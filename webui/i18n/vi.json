@@ -284,6 +284,13 @@
     "Please Enter the Coverr API Key": "Vui lòng nhập **API Key Coverr**",
     "Video Encoder": "Bộ Mã Hóa Video",
     "Default Video Encoder": "Mặc định (Khuyên dùng)",
-    "Video Encoder Help": "Tùy chọn nâng cao. Mặc định tuân theo chính sách mã hóa ổn định của ứng dụng, hiện là libx264. Nếu bộ mã hóa phần cứng không khả dụng, ứng dụng tự động chuyển về libx264."
+    "Video Encoder Help": "Tùy chọn nâng cao. Mặc định tuân theo chính sách mã hóa ổn định của ứng dụng, hiện là libx264. Nếu bộ mã hóa phần cứng không khả dụng, ứng dụng tự động chuyển về libx264.",
+    "Find Today's Best Bet": "Tìm lựa chọn tốt nhất hôm nay",
+    "Finding Today's Best Bet": "Đang tìm lựa chọn tốt nhất hôm nay — lấy xu hướng trực tiếp và viết kịch bản...",
+    "Best Bet Failed": "Tìm lựa chọn tốt nhất thất bại",
+    "Best Bet Ready": "Lựa chọn tốt nhất đã sẵn sàng — xem lại rồi nhấn Tạo",
+    "Why This Topic": "Vì sao chủ đề này",
+    "Best Bet Evidence Intro": "Chọn từ các tín hiệu trực tiếp vừa thu thập",
+    "Runner Ups": "Phương án dự phòng"
   }
 }
