@@ -293,6 +293,8 @@
     "Best Bet Ready": "Melhor aposta pronta — revise e clique em Gerar",
     "Why This Topic": "Por que este tema",
     "Best Bet Evidence Intro": "Escolhido de sinais ao vivo recém-coletados",
-    "Runner Ups": "Alternativas"
+    "Runner Ups": "Alternativas",
+    "Simple Mode Help": "Hide extra settings. You only see the topic box and Generate; everything else uses your last saved settings.",
+    "Video Source Help": "Stock sites pull existing clips. Grok Imagine and KIE Generate each make one paid AI clip per scene. Local uses files you already have."
   }
 }

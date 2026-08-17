@@ -71,19 +71,26 @@ def get_application() -> FastAPI:
 app = get_application()
 
 # Configures the CORS middleware for the FastAPI app
+# 默认不允许任何跨源访问。浏览器里的任意网页（包括广告 iframe）都能向
+# 127.0.0.1 发请求；`["*"]` 加 allow_credentials 会让 Starlette 反射来源，
+# 等于把无鉴权 API 交给 Alex 打开的每一个网页。WebUI 走进程内调用，不需要
+# CORS；确有跨源需求时用 CORS_ALLOWED_ORIGINS 显式列出。
 cors_allowed_origins_str = os.getenv("CORS_ALLOWED_ORIGINS", "")
-origins = cors_allowed_origins_str.split(",") if cors_allowed_origins_str else ["*"]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+origins = cors_allowed_origins_str.split(",") if cors_allowed_origins_str else []
+if origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 task_dir = utils.task_dir()
+# follow_symlink 必须保持关闭：storage 里一旦出现符号链接，开启后就会绕过
+# file_security 的目录约束，变成任意文件读取。
 app.mount(
-    "/tasks", StaticFiles(directory=task_dir, html=True, follow_symlink=True), name=""
+    "/tasks", StaticFiles(directory=task_dir, html=True, follow_symlink=False), name=""
 )
 
 public_dir = utils.public_dir()

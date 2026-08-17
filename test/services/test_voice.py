@@ -36,19 +36,20 @@ text_zh = """
 12日天气短暂好转，早晚清凉；
 """
 
-voice_rate=1.0
-voice_volume=1.0
+voice_rate = 1.0
+voice_volume = 1.0
 RUN_INTEGRATION_TESTS = os.environ.get("MPT_RUN_INTEGRATION_TESTS", "").lower() in {
     "1",
     "true",
     "yes",
 }
-                    
+
+
 class TestVoiceService(unittest.TestCase):
     def setUp(self):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
-    
+
     def tearDown(self):
         self.loop.close()
 
@@ -64,9 +65,7 @@ class TestVoiceService(unittest.TestCase):
     def test_get_all_azure_voices_filtered(self):
         filtered = vs.get_all_azure_voices(filter_locals=["zh-CN", "en-US"])
         self.assertTrue(len(filtered) > 0)
-        self.assertTrue(
-            all(v.startswith(("zh-CN", "en-US")) for v in filtered)
-        )
+        self.assertTrue(all(v.startswith(("zh-CN", "en-US")) for v in filtered))
 
     def test_no_voice_tts_generates_silent_audio_and_subtitle_timeline(self):
         """
@@ -75,17 +74,21 @@ class TestVoiceService(unittest.TestCase):
         视频合成链路的预期。
         """
 
-        def fake_run(command, capture_output, text, check):
+        def fake_run(command, capture_output, text, check, timeout=None):
             self.assertEqual(command[0], "/tmp/fake-ffmpeg")
             self.assertIn("anullsrc=r=44100:cl=mono", command)
             Path(command[-1]).write_bytes(b"fake-silent-mp3")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            vs.utils,
-            "get_ffmpeg_binary",
-            return_value="/tmp/fake-ffmpeg",
-        ), patch.object(vs.subprocess, "run", side_effect=fake_run):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(
+                vs.utils,
+                "get_ffmpeg_binary",
+                return_value="/tmp/fake-ffmpeg",
+            ),
+            patch.object(vs.subprocess, "run", side_effect=fake_run),
+        ):
             voice_file = str(Path(tmp_dir) / "silent.mp3")
             sub_maker = vs.tts(
                 text="第一句话。Second sentence.",
@@ -97,7 +100,9 @@ class TestVoiceService(unittest.TestCase):
             self.assertEqual(Path(voice_file).read_bytes(), b"fake-silent-mp3")
 
         self.assertIsNotNone(sub_maker)
-        self.assertEqual(getattr(sub_maker, "subs", []), ["第一句话", "Second sentence"])
+        self.assertEqual(
+            getattr(sub_maker, "subs", []), ["第一句话", "Second sentence"]
+        )
         self.assertEqual(len(getattr(sub_maker, "offset", [])), 2)
         self.assertGreater(vs.get_audio_duration(sub_maker), 0)
 
@@ -108,8 +113,10 @@ class TestVoiceService(unittest.TestCase):
         而应交给 moviepy(ffmpeg) 读取真实时长。
         """
         for path in ("custom-audio.m4a", "voice.wav", "clip.aac"):
-            with patch.object(vs.os.path, "exists", return_value=True), \
-                    patch.object(vs, "AudioFileClip") as mock_afc:
+            with (
+                patch.object(vs.os.path, "exists", return_value=True),
+                patch.object(vs, "AudioFileClip") as mock_afc,
+            ):
                 mock_afc.return_value.__enter__.return_value.duration = 28.89
                 self.assertEqual(vs.get_audio_duration(path), 28.89)
                 mock_afc.assert_called_once_with(path)
@@ -137,7 +144,9 @@ class TestVoiceService(unittest.TestCase):
             "Это длинный тестовый сценарий без озвучки. "
             "Он должен получить достаточно времени для чтения субтитров."
         )
-        arabic_text = "هذا اختبار طويل بدون تعليق صوتي، ويجب أن يحصل على وقت كاف لقراءة الترجمة."
+        arabic_text = (
+            "هذا اختبار طويل بدون تعليق صوتي، ويجب أن يحصل على وقت كاف لقراءة الترجمة."
+        )
 
         self.assertGreater(vs.estimate_no_voice_duration(russian_text), 8.0)
         self.assertGreater(vs.estimate_no_voice_duration(arabic_text), 8.0)
@@ -147,14 +156,18 @@ class TestVoiceService(unittest.TestCase):
         即使 FFmpeg 进程返回成功，也要确认输出文件真实存在且非空。这样可以把
         异常收敛在 TTS 阶段，而不是拖到后续视频合成阶段才暴露。
         """
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            vs.utils,
-            "get_ffmpeg_binary",
-            return_value="/tmp/fake-ffmpeg",
-        ), patch.object(
-            vs.subprocess,
-            "run",
-            return_value=SimpleNamespace(returncode=0, stdout="", stderr=""),
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(
+                vs.utils,
+                "get_ffmpeg_binary",
+                return_value="/tmp/fake-ffmpeg",
+            ),
+            patch.object(
+                vs.subprocess,
+                "run",
+                return_value=SimpleNamespace(returncode=0, stdout="", stderr=""),
+            ),
         ):
             voice_file = str(Path(tmp_dir) / "missing-silent.mp3")
 
@@ -191,7 +204,7 @@ class TestVoiceService(unittest.TestCase):
 
         voice_name = "siliconflow:FunAudioLLM/CosyVoice2-0.5B:alex-Male"
         voice_name = vs.parse_voice_name(voice_name)
-        
+
         async def _do():
             parts = voice_name.split(":")
             if len(parts) >= 3:
@@ -204,18 +217,25 @@ class TestVoiceService(unittest.TestCase):
                 voice_file = f"{temp_dir}/tts-siliconflow-{voice}.mp3"
                 subtitle_file = f"{temp_dir}/tts-siliconflow-{voice}.srt"
                 sub_maker = vs.siliconflow_tts(
-                    text=text_zh, model=model, voice=full_voice, voice_file=voice_file, voice_rate=voice_rate, voice_volume=voice_volume
+                    text=text_zh,
+                    model=model,
+                    voice=full_voice,
+                    voice_file=voice_file,
+                    voice_rate=voice_rate,
+                    voice_volume=voice_volume,
                 )
                 if not sub_maker:
                     self.fail("siliconflow tts failed")
-                vs.create_subtitle(sub_maker=sub_maker, text=text_zh, subtitle_file=subtitle_file)
+                vs.create_subtitle(
+                    sub_maker=sub_maker, text=text_zh, subtitle_file=subtitle_file
+                )
                 audio_duration = vs.get_audio_duration(sub_maker)
                 print(f"voice: {voice_name}, audio duration: {audio_duration}s")
             else:
                 self.fail("siliconflow invalid voice name")
 
         self.loop.run_until_complete(_do())
-    
+
     @unittest.skipUnless(
         RUN_INTEGRATION_TESTS,
         "MPT_RUN_INTEGRATION_TESTS not set",
@@ -224,15 +244,20 @@ class TestVoiceService(unittest.TestCase):
         voice_name = "zh-CN-XiaoyiNeural-Female"
         voice_name = vs.parse_voice_name(voice_name)
         print(voice_name)
-        
+
         voice_file = f"{temp_dir}/tts-azure-v1-{voice_name}.mp3"
         subtitle_file = f"{temp_dir}/tts-azure-v1-{voice_name}.srt"
         sub_maker = vs.azure_tts_v1(
-            text=text_zh, voice_name=voice_name, voice_file=voice_file, voice_rate=voice_rate
+            text=text_zh,
+            voice_name=voice_name,
+            voice_file=voice_file,
+            voice_rate=voice_rate,
         )
         if not sub_maker:
             self.fail("azure tts v1 failed")
-        vs.create_subtitle(sub_maker=sub_maker, text=text_zh, subtitle_file=subtitle_file)
+        vs.create_subtitle(
+            sub_maker=sub_maker, text=text_zh, subtitle_file=subtitle_file
+        )
         audio_duration = vs.get_audio_duration(sub_maker)
         print(f"voice: {voice_name}, audio duration: {audio_duration}s")
 
@@ -273,9 +298,11 @@ class TestVoiceService(unittest.TestCase):
                     return ""
                 return "1\n00:00:00,000 --> 00:00:01,000\nlegacy\n"
 
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            vs.edge_tts, "Communicate", _LegacyCommunicate
-        ), patch.object(vs.edge_tts, "SubMaker", _FakeSubMaker):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(vs.edge_tts, "Communicate", _LegacyCommunicate),
+            patch.object(vs.edge_tts, "SubMaker", _FakeSubMaker),
+        ):
             voice_file = str(Path(tmp_dir) / "legacy-edge-tts.mp3")
             sub_maker = vs.azure_tts_v1(
                 text="legacy edge tts compatibility",
@@ -317,12 +344,15 @@ class TestVoiceService(unittest.TestCase):
             def get_srt(self):
                 return ""
 
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            vs.edge_tts, "Communicate", _HangingCommunicate
-        ), patch.object(vs.edge_tts, "SubMaker", _FakeSubMaker), patch.object(
-            vs.config,
-            "app",
-            dict(vs.config.app, edge_tts_timeout=0.05),
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(vs.edge_tts, "Communicate", _HangingCommunicate),
+            patch.object(vs.edge_tts, "SubMaker", _FakeSubMaker),
+            patch.object(
+                vs.config,
+                "app",
+                dict(vs.config.app, edge_tts_timeout=0.05),
+            ),
         ):
             voice_file = Path(tmp_dir) / "hanging-edge-tts.mp3"
             started_at = time.monotonic()
@@ -343,7 +373,9 @@ class TestVoiceService(unittest.TestCase):
         "MPT_RUN_INTEGRATION_TESTS not set",
     )
     def test_azure_tts_v2(self):
-        if not vs.config.azure.get("speech_key") or not vs.config.azure.get("speech_region"):
+        if not vs.config.azure.get("speech_key") or not vs.config.azure.get(
+            "speech_region"
+        ):
             self.skipTest("Azure speech key or region is not configured")
 
         voice_name = "zh-CN-XiaoxiaoMultilingualNeural-V2-Female"
@@ -361,7 +393,9 @@ class TestVoiceService(unittest.TestCase):
             )
             if not sub_maker:
                 self.fail("azure tts v2 failed")
-            vs.create_subtitle(sub_maker=sub_maker, text=text_zh, subtitle_file=subtitle_file)
+            vs.create_subtitle(
+                sub_maker=sub_maker, text=text_zh, subtitle_file=subtitle_file
+            )
             audio_duration = vs.get_audio_duration(sub_maker)
             print(f"voice: {voice_name}, audio duration: {audio_duration}s")
 
@@ -377,7 +411,7 @@ class TestVoiceService(unittest.TestCase):
 
         self.assertIn('xml:lang="zh-CN"', ssml)
         self.assertIn('rate="1.8"', ssml)
-        self.assertIn("A &lt; B &amp; \"quoted\"", ssml)
+        self.assertIn('A &lt; B &amp; "quoted"', ssml)
 
     def test_tts_forwards_rate_to_azure_v2(self):
         """统一 TTS 入口不能在分发 Azure V2 时丢失 voice_rate。"""
@@ -459,10 +493,13 @@ class TestVoiceService(unittest.TestCase):
 
         self.assertFalse(output_dir.exists())
 
-        with patch("google.genai.Client", _FakeClient), patch.object(
-            vs.config,
-            "app",
-            dict(vs.config.app, gemini_api_key="test-key"),
+        with (
+            patch("google.genai.Client", _FakeClient),
+            patch.object(
+                vs.config,
+                "app",
+                dict(vs.config.app, gemini_api_key="test-key"),
+            ),
         ):
             sub_maker = vs.gemini_tts(
                 text=text,
@@ -538,22 +575,27 @@ class TestVoiceService(unittest.TestCase):
             chat=SimpleNamespace(completions=fake_completions)
         )
 
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            vs,
-            "OpenAI",
-            return_value=fake_client,
-        ) as openai_client, patch(
-            "pydub.AudioSegment.from_file",
-            return_value=_FakeAudioSegment(),
-        ), patch.object(
-            vs.config,
-            "app",
-            dict(
-                vs.config.app,
-                mimo_api_key="mimo-key",
-                mimo_base_url="https://api.xiaomimimo.com/v1",
-                mimo_tts_model_name="mimo-v2.5-tts",
-                mimo_tts_style_prompt="用清晰的中文旁白朗读。",
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(
+                vs,
+                "OpenAI",
+                return_value=fake_client,
+            ) as openai_client,
+            patch(
+                "pydub.AudioSegment.from_file",
+                return_value=_FakeAudioSegment(),
+            ),
+            patch.object(
+                vs.config,
+                "app",
+                dict(
+                    vs.config.app,
+                    mimo_api_key="mimo-key",
+                    mimo_base_url="https://api.xiaomimimo.com/v1",
+                    mimo_tts_model_name="mimo-v2.5-tts",
+                    mimo_tts_style_prompt="用清晰的中文旁白朗读。",
+                ),
             ),
         ):
             voice_file = str(Path(tmp_dir) / "mimo-tts.mp3")
@@ -584,7 +626,9 @@ class TestVoiceService(unittest.TestCase):
         )
         self.assertEqual(generated_audio, b"fake-mp3")
         self.assertIsNotNone(sub_maker)
-        self.assertEqual(getattr(sub_maker, "subs", []), ["小米语音合成测试", "第二句话"])
+        self.assertEqual(
+            getattr(sub_maker, "subs", []), ["小米语音合成测试", "第二句话"]
+        )
         self.assertEqual(len(getattr(sub_maker, "offset", [])), 2)
 
     def test_minimax_tts_uses_regional_endpoint_and_hex_audio(self):
@@ -593,7 +637,10 @@ class TestVoiceService(unittest.TestCase):
 
             @staticmethod
             def json():
-                return {"data": {"audio": b"audio".hex(), "status": 2}, "base_resp": {"status_code": 0}}
+                return {
+                    "data": {"audio": b"audio".hex(), "status": 2},
+                    "base_resp": {"status_code": 0},
+                }
 
         class _Clip:
             duration = 2.5
@@ -608,17 +655,25 @@ class TestVoiceService(unittest.TestCase):
             return _Response()
 
         settings = {
-            "api_key": "test-key", "base_url": vs.MINIMAX_TTS_CN_URL,
-            "model_id": "speech-2.8-turbo", "voice_id": "male-qn-qingse",
-            "sample_rate": 32000, "bitrate": 128000, "audio_format": "mp3", "channel": 1,
+            "api_key": "test-key",
+            "base_url": vs.MINIMAX_TTS_CN_URL,
+            "model_id": "speech-2.8-turbo",
+            "voice_id": "male-qn-qingse",
+            "sample_rate": 32000,
+            "bitrate": 128000,
+            "audio_format": "mp3",
+            "channel": 1,
         }
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            vs.config, "minimax_tts", settings
-        ), patch.object(vs.requests, "post", side_effect=_post), patch.object(
-            vs, "AudioFileClip", return_value=_Clip()
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(vs.config, "minimax_tts", settings),
+            patch.object(vs.requests, "post", side_effect=_post),
+            patch.object(vs, "AudioFileClip", return_value=_Clip()),
         ):
             voice_file = str(Path(tmp_dir) / "minimax.mp3")
-            result = vs.minimax_tts("Speech test.", "male-qn-qingse", 1.2, voice_file, 1.5)
+            result = vs.minimax_tts(
+                "Speech test.", "male-qn-qingse", 1.2, voice_file, 1.5
+            )
             self.assertEqual(Path(voice_file).read_bytes(), b"audio")
 
         self.assertIsNotNone(result)
@@ -626,17 +681,23 @@ class TestVoiceService(unittest.TestCase):
         self.assertEqual(captured["headers"]["Authorization"], "Bearer test-key")
         self.assertEqual(captured["json"]["model"], "speech-2.8-turbo")
         self.assertEqual(captured["json"]["text"], "Speech test.")
-        self.assertEqual(captured["json"]["voice_setting"]["voice_id"], "male-qn-qingse")
+        self.assertEqual(
+            captured["json"]["voice_setting"]["voice_id"], "male-qn-qingse"
+        )
         self.assertEqual(captured["json"]["audio_setting"]["format"], "mp3")
 
     def test_minimax_tts_reuses_cn_llm_key_and_endpoint(self):
         """TTS 未单独配置时，应复用同区域的 MiniMax LLM 凭证和地址。"""
+
         class _Response:
             status_code, text = 200, ""
 
             @staticmethod
             def json():
-                return {"data": {"audio": b"audio".hex(), "status": 2}, "base_resp": {"status_code": 0}}
+                return {
+                    "data": {"audio": b"audio".hex(), "status": 2},
+                    "base_resp": {"status_code": 0},
+                }
 
         class _Clip:
             duration = 1.25
@@ -651,18 +712,22 @@ class TestVoiceService(unittest.TestCase):
             return _Response()
 
         settings = {
-            "api_key": "", "base_url": vs.MINIMAX_TTS_GLOBAL_URL,
-            "model_id": vs.MINIMAX_TTS_DEFAULT_MODEL, "audio_format": "mp3",
+            "api_key": "",
+            "base_url": vs.MINIMAX_TTS_GLOBAL_URL,
+            "model_id": vs.MINIMAX_TTS_DEFAULT_MODEL,
+            "audio_format": "mp3",
         }
         app_settings = {
             "minimax_api_key": "shared-cn-key",
             "minimax_base_url": "https://api.minimaxi.com/v1",
         }
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            vs.config, "minimax_tts", settings
-        ), patch.object(vs.config, "app", app_settings), patch.object(
-            vs.requests, "post", side_effect=_post
-        ), patch.object(vs, "AudioFileClip", return_value=_Clip()):
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(vs.config, "minimax_tts", settings),
+            patch.object(vs.config, "app", app_settings),
+            patch.object(vs.requests, "post", side_effect=_post),
+            patch.object(vs, "AudioFileClip", return_value=_Clip()),
+        ):
             voice_file = str(Path(tmp_dir) / "minimax.mp3")
             result = vs.minimax_tts("测试。", "male-qn-qingse", 1.0, voice_file)
 
@@ -748,40 +813,55 @@ class TestVoiceService(unittest.TestCase):
 
     def test_minimax_tts_does_not_leave_invalid_audio_output(self):
         """响应音频无法解析时，不应覆盖已有文件或留下临时文件。"""
+
         class _Response:
             status_code, text = 200, ""
 
             @staticmethod
             def json():
-                return {"data": {"audio": b"invalid-audio".hex(), "status": 2}, "base_resp": {"status_code": 0}}
+                return {
+                    "data": {"audio": b"invalid-audio".hex(), "status": 2},
+                    "base_resp": {"status_code": 0},
+                }
 
         settings = {
-            "api_key": "test-key", "base_url": vs.MINIMAX_TTS_GLOBAL_URL,
-            "model_id": vs.MINIMAX_TTS_DEFAULT_MODEL, "audio_format": "mp3",
+            "api_key": "test-key",
+            "base_url": vs.MINIMAX_TTS_GLOBAL_URL,
+            "model_id": vs.MINIMAX_TTS_DEFAULT_MODEL,
+            "audio_format": "mp3",
         }
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            vs.config, "minimax_tts", settings
-        ), patch.object(vs.requests, "post", return_value=_Response()), patch.object(
-            vs, "AudioFileClip", side_effect=OSError("invalid audio")
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(vs.config, "minimax_tts", settings),
+            patch.object(vs.requests, "post", return_value=_Response()),
+            patch.object(vs, "AudioFileClip", side_effect=OSError("invalid audio")),
         ):
             voice_path = Path(tmp_dir) / "minimax.mp3"
             voice_path.write_bytes(b"existing-audio")
-            result = vs.minimax_tts("Speech test.", "English_expressive_narrator", 1.0, str(voice_path))
+            result = vs.minimax_tts(
+                "Speech test.", "English_expressive_narrator", 1.0, str(voice_path)
+            )
 
             self.assertIsNone(result)
             self.assertEqual(voice_path.read_bytes(), b"existing-audio")
-            self.assertEqual([path.name for path in Path(tmp_dir).iterdir()], ["minimax.mp3"])
+            self.assertEqual(
+                [path.name for path in Path(tmp_dir).iterdir()], ["minimax.mp3"]
+            )
 
     def test_minimax_voice_helpers_and_dispatch(self):
         with patch.object(vs.config, "minimax_tts", {"voice_id": "narrator"}):
             self.assertEqual(vs.get_minimax_voices(), ["minimax:narrator"])
-        self.assertEqual(vs.get_minimax_voices("custom-voice"), ["minimax:custom-voice"])
+        self.assertEqual(
+            vs.get_minimax_voices("custom-voice"), ["minimax:custom-voice"]
+        )
         self.assertTrue(vs.is_minimax_voice("minimax:narrator"))
         sentinel = object()
         with patch.object(vs, "minimax_tts", return_value=sentinel) as implementation:
             result = vs.tts("test", "minimax:narrator", 1.0, "voice.mp3", 1.0)
         self.assertIs(result, sentinel)
-        implementation.assert_called_once_with("test", "narrator", 1.0, "voice.mp3", 1.0)
+        implementation.assert_called_once_with(
+            "test", "narrator", 1.0, "voice.mp3", 1.0
+        )
 
     def test_chatterbox_voice_helpers(self):
         """is_chatterbox_voice / get_chatterbox_voices basics and normalisation."""
@@ -835,18 +915,19 @@ class TestVoiceService(unittest.TestCase):
             captured["headers"] = headers
             return _FakeResponse()
 
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            vs.config,
-            "chatterbox",
-            {
-                "base_url": "http://localhost:4123/v1/",
-                "api_key": "secret",
-                "model_id": "chatterbox",
-            },
-        ), patch.object(
-            vs.requests, "post", side_effect=_fake_post
-        ) as post, patch.object(
-            vs, "AudioFileClip", return_value=_FakeClip()
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(
+                vs.config,
+                "chatterbox",
+                {
+                    "base_url": "http://localhost:4123/v1/",
+                    "api_key": "secret",
+                    "model_id": "chatterbox",
+                },
+            ),
+            patch.object(vs.requests, "post", side_effect=_fake_post) as post,
+            patch.object(vs, "AudioFileClip", return_value=_FakeClip()),
         ):
             voice_file = str(Path(tmp_dir) / "chatterbox.mp3")
             sub_maker = vs.chatterbox_tts(
@@ -875,9 +956,10 @@ class TestVoiceService(unittest.TestCase):
 
     def test_chatterbox_tts_requires_base_url(self):
         """Missing base_url short-circuits without any network call."""
-        with patch.object(
-            vs.config, "chatterbox", {"base_url": ""}
-        ), patch.object(vs.requests, "post") as post:
+        with (
+            patch.object(vs.config, "chatterbox", {"base_url": ""}),
+            patch.object(vs.requests, "post") as post,
+        ):
             result = vs.chatterbox_tts(
                 text="hi", voice="default", voice_file="unused.mp3"
             )
@@ -892,11 +974,13 @@ class TestVoiceService(unittest.TestCase):
             content = b""
             text = "boom"
 
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            vs.config, "chatterbox", {"base_url": "http://localhost:4123/v1"}
-        ), patch.object(
-            vs.requests, "post", return_value=_FakeResponse()
-        ) as post:
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(
+                vs.config, "chatterbox", {"base_url": "http://localhost:4123/v1"}
+            ),
+            patch.object(vs.requests, "post", return_value=_FakeResponse()) as post,
+        ):
             voice_file = str(Path(tmp_dir) / "chatterbox.mp3")
             result = vs.chatterbox_tts(
                 text="hi", voice="default", voice_file=voice_file
@@ -916,13 +1000,18 @@ class TestVoiceService(unittest.TestCase):
             2.4,
         )
 
-        with tempfile.TemporaryDirectory() as tmp_dir, patch.object(
-            task_service.config,
-            "app",
-            dict(task_service.config.app, subtitle_provider="edge"),
-        ), patch("app.services.subtitle.create") as whisper_create, patch(
-            "app.utils.utils.task_dir",
-            lambda tid="": str(Path(tmp_dir) / tid) if tid else str(Path(tmp_dir)),
+        with (
+            tempfile.TemporaryDirectory() as tmp_dir,
+            patch.object(
+                task_service.config,
+                "app",
+                dict(task_service.config.app, subtitle_provider="edge"),
+            ),
+            patch("app.services.subtitle.create") as whisper_create,
+            patch(
+                "app.utils.utils.task_dir",
+                lambda tid="": str(Path(tmp_dir) / tid) if tid else str(Path(tmp_dir)),
+            ),
         ):
             task_id = "gemini-subtitle-edge-task"
             Path(tmp_dir, task_id).mkdir(parents=True, exist_ok=True)
@@ -938,7 +1027,9 @@ class TestVoiceService(unittest.TestCase):
             self.assertTrue(Path(subtitle_path).exists())
             self.assertFalse(whisper_create.called)
             subtitle_content = Path(subtitle_path).read_text(encoding="utf-8")
-            self.assertIn("Gemini subtitle generation should work now", subtitle_content)
+            self.assertIn(
+                "Gemini subtitle generation should work now", subtitle_content
+            )
             self.assertIn("Testing multiple lines", subtitle_content)
 
     def test_script_split_keeps_thousand_separator_comma(self):
@@ -1143,7 +1234,6 @@ class TestVoiceService(unittest.TestCase):
 
 
 class TestElevenLabsVoice(unittest.TestCase):
-
     def test_is_elevenlabs_voice_true(self):
         self.assertTrue(vs.is_elevenlabs_voice("elevenlabs:pNInz6obpgDQGcFmaJgB:Adam"))
 
@@ -1173,10 +1263,13 @@ class TestElevenLabsVoice(unittest.TestCase):
             ]
         }
         result = vs.get_elevenlabs_voices("fake-api-key")
-        self.assertEqual(result, [
-            "elevenlabs:abc123:Adam",
-            "elevenlabs:def456:Rachel",
-        ])
+        self.assertEqual(
+            result,
+            [
+                "elevenlabs:abc123:Adam",
+                "elevenlabs:def456:Rachel",
+            ],
+        )
         mock_get.assert_called_once()
         call_kwargs = mock_get.call_args
         self.assertIn("xi-api-key", call_kwargs.kwargs.get("headers", {}))
@@ -1191,6 +1284,7 @@ class TestElevenLabsVoice(unittest.TestCase):
     @patch("app.services.voice.requests.get")
     def test_get_elevenlabs_voices_network_error(self, mock_get):
         import requests as req_lib
+
         mock_get.side_effect = req_lib.exceptions.ConnectionError("timeout")
         result = vs.get_elevenlabs_voices("fake-key")
         self.assertEqual(result, [])
@@ -1253,9 +1347,7 @@ class TestElevenLabsVoice(unittest.TestCase):
         for configured_key, env_key in (("config-key", "env-key"), ("", "env-key")):
             with self.subTest(configured_key=configured_key):
                 with (
-                    patch.object(
-                        vs.config, "elevenlabs", {"api_key": configured_key}
-                    ),
+                    patch.object(vs.config, "elevenlabs", {"api_key": configured_key}),
                     patch.object(
                         elevenlabs_music.config,
                         "elevenlabs",
@@ -1272,4 +1364,4 @@ class TestElevenLabsVoice(unittest.TestCase):
 if __name__ == "__main__":
     # python -m unittest test.services.test_voice.TestVoiceService.test_azure_tts_v1
     # python -m unittest test.services.test_voice.TestVoiceService.test_azure_tts_v2
-    unittest.main() 
+    unittest.main()

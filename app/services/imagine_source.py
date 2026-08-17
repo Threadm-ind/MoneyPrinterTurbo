@@ -287,7 +287,6 @@ def generate_videos(
         return []
 
     deadline = time.time() + poll_timeout
-    video_paths = []
     pending = {record["request_id"]: record for record in records}
     while pending and time.time() < deadline:
         for request_id, record in list(pending.items()):
@@ -312,7 +311,7 @@ def generate_videos(
                         url, save_dir=utils.task_dir(task_id)
                     )
                     if saved_path:
-                        video_paths.append(saved_path)
+                        record["path"] = saved_path
                 del pending[request_id]
             elif status in {"failed", "expired"}:
                 record["state"] = status
@@ -335,11 +334,15 @@ def generate_videos(
         record["state"] = "timeout"
         logger.error(
             f"imagine task {record['request_id']} ('{record['term']}') still pending "
-            f"after {poll_timeout}s; it may finish later — do NOT resubmit, "
-            f"check imagine_tasks.json"
+            f"after {poll_timeout}s. It may finish on its own. Do not submit again "
+            f"(that would pay for a new clip). Check imagine_tasks.json."
         )
     if pending:
         _persist_tasks(task_id, records)
+
+    # 场景提示词按脚本叙事顺序生成，素材也必须按提交顺序返回；完成顺序
+    # 取决于各任务的渲染速度，直接使用会打乱成片的叙事时间线。
+    video_paths = [record["path"] for record in records if record.get("path")]
 
     logger.info(f"imagine source: {len(video_paths)} clip(s) ready")
     return video_paths

@@ -322,6 +322,8 @@
     "Best Bet Ready": "最佳选题已就绪，确认后点击生成",
     "Why This Topic": "为什么是这个选题",
     "Best Bet Evidence Intro": "来自刚刚抓取的实时信号",
-    "Runner Ups": "备选"
+    "Runner Ups": "备选",
+    "Simple Mode Help": "Hide extra settings. You only see the topic box and Generate; everything else uses your last saved settings.",
+    "Video Source Help": "Stock sites pull existing clips. Grok Imagine and KIE Generate each make one paid AI clip per scene. Local uses files you already have."
   }
 }

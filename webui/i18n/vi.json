@@ -293,6 +293,8 @@
     "Best Bet Ready": "Lựa chọn tốt nhất đã sẵn sàng — xem lại rồi nhấn Tạo",
     "Why This Topic": "Vì sao chủ đề này",
     "Best Bet Evidence Intro": "Chọn từ các tín hiệu trực tiếp vừa thu thập",
-    "Runner Ups": "Phương án dự phòng"
+    "Runner Ups": "Phương án dự phòng",
+    "Simple Mode Help": "Hide extra settings. You only see the topic box and Generate; everything else uses your last saved settings.",
+    "Video Source Help": "Stock sites pull existing clips. Grok Imagine and KIE Generate each make one paid AI clip per scene. Local uses files you already have."
   }
 }

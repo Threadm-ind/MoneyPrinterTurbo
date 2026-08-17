@@ -293,6 +293,8 @@
     "Best Bet Ready": "En iyi bahis hazır — inceleyin ve Oluştur'a basın",
     "Why This Topic": "Bu konu neden",
     "Best Bet Evidence Intro": "Az önce toplanan canlı sinyallerden seçildi",
-    "Runner Ups": "Yedekler"
+    "Runner Ups": "Yedekler",
+    "Simple Mode Help": "Hide extra settings. You only see the topic box and Generate; everything else uses your last saved settings.",
+    "Video Source Help": "Stock sites pull existing clips. Grok Imagine and KIE Generate each make one paid AI clip per scene. Local uses files you already have."
   }
 }

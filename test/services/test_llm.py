@@ -203,6 +203,100 @@ class TestScriptPromptOptions(unittest.TestCase):
             )
 
 
+class TestMetaPreambleStrip(unittest.TestCase):
+    def test_strips_leaked_process_note_before_script(self):
+        """
+        CLI 后端真实泄漏案例：脚本前多了一句“我来写这个脚本”的过程说明，
+        TTS 会把它原样读出来。必须整句去掉且保留正文 hook。
+        """
+        leaked = (
+            "I'll write this as spoken narration and check the house voice "
+            "rules first so the three paragraphs stay punchy and clean. "
+            "Someone just found a stock certificate in their family's bank "
+            "safe, was told it's worthless, and it might not be."
+        )
+        result = llm._strip_meta_preamble(leaked)
+        self.assertTrue(result.startswith("Someone just found"))
+        self.assertNotIn("house voice rules", result)
+
+    def test_keeps_legitimate_first_person_hooks(self):
+        """正常口播开头不能被误伤。"""
+        for script in (
+            "I'll show you how to check if an old certificate is worth money. Start with the CUSIP.",
+            "Here's the thing about old stock certificates. Most are dead paper.",
+            "Let's talk about the safe in your grandmother's house. It might hold money.",
+        ):
+            with self.subTest(script=script):
+                self.assertEqual(llm._strip_meta_preamble(script), script)
+
+    def test_strips_at_most_two_meta_sentences(self):
+        leaked = (
+            "Sure, I can write that script for you. "
+            "Here is the narration with three paragraphs as requested. "
+            "The hook lands first."
+        )
+        result = llm._strip_meta_preamble(leaked)
+        self.assertEqual(result, "The hook lands first.")
+
+
+class TestScenePrompts(unittest.TestCase):
+    def test_generate_scene_prompts_requests_diverse_ordered_scenes(self):
+        """
+        生成式素材源的成片质量取决于场景提示词是否多样且跟随脚本顺序。
+        这里验证约束确实写进了 prompt，且返回值保持 List[str] 契约。
+        """
+        captured = {}
+
+        def fake_generate_response(prompt):
+            captured["prompt"] = prompt
+            return (
+                '["a wide shot of a bank vault door, warm light, slow push-in",'
+                ' "macro shot of an engraved stock certificate under a desk lamp"]'
+            )
+
+        with patch.object(
+            llm, "_generate_response", side_effect=fake_generate_response
+        ):
+            result = llm.generate_scene_prompts(
+                video_subject="old stock certificates",
+                video_script="First the vault. Then the certificate.",
+                amount=2,
+            )
+
+        self.assertEqual(len(result), 2)
+        self.assertIn("bank vault door", result[0])
+        self.assertIn("same order as the script narration", captured["prompt"])
+        self.assertIn("clearly different", captured["prompt"])
+        self.assertIn("no on-screen text", captured["prompt"])
+
+    def test_generate_scene_prompts_returns_empty_list_on_provider_error(self):
+        """Provider 错误文案不能被当成提示词返回给素材层。"""
+        with patch.object(
+            llm,
+            "_generate_response",
+            return_value="Error: provider down",
+        ):
+            result = llm.generate_scene_prompts(
+                video_subject="subject",
+                video_script="script",
+                amount=3,
+            )
+
+        self.assertEqual(result, [])
+
+    def test_generate_scene_prompts_strips_code_fence_and_blanks(self):
+        """代码块包裹和空白项都要被清理，避免下游提交空提示词。"""
+        response = '```json\n["scene one prompt", "  ", "scene two prompt"]\n```'
+        with patch.object(llm, "_generate_response", return_value=response):
+            result = llm.generate_scene_prompts(
+                video_subject="subject",
+                video_script="script",
+                amount=2,
+            )
+
+        self.assertEqual(result, ["scene one prompt", "scene two prompt"])
+
+
 class TestLLMConnection(unittest.TestCase):
     def test_connection_sends_one_minimal_request(self):
         """连接测试只发送一次固定最小请求，不触发脚本生成重试。"""
@@ -1516,9 +1610,17 @@ class TestSocialMetadata(unittest.TestCase):
             '"hashtags":["#Tokyo","#Coffee","#Shorts"]}'
         )
 
+        # 本地 config.toml 可能已经配置了 api_key；这里验证的是响应结构，
+        # 用请求头带上当前配置的 key（空 key 时 verify_token 直接放行）。
+        headers = {}
+        configured_key = llm.config.app.get("api_key", "")
+        if configured_key:
+            headers["x-api-key"] = configured_key
+
         with patch.object(llm, "_generate_response", return_value=llm_response):
             response = TestClient(app).post(
                 "/api/v1/social-metadata",
+                headers=headers,
                 json=request_body,
             )
 

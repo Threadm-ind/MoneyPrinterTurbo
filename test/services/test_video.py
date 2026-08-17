@@ -56,12 +56,41 @@ class TestVideoService(unittest.TestCase):
         self.test_img_path = os.path.join(resources_dir, "1.png")
         vd._runtime_disabled_video_codecs.clear()
         vd._ffmpeg_encoder_exists.cache_clear()
+        self._clear_ffmpeg_encoder_cache()
 
     def tearDown(self):
         config.app.clear()
         config.app.update(self.original_app_config)
         vd._runtime_disabled_video_codecs.clear()
         vd._ffmpeg_encoder_exists.cache_clear()
+        self._clear_ffmpeg_encoder_cache()
+
+    def _clear_ffmpeg_encoder_cache(self):
+        has_encoder = getattr(utils, "ffmpeg_has_encoder", None)
+        cache_clear = getattr(has_encoder, "cache_clear", None)
+        if cache_clear:
+            cache_clear()
+
+    @staticmethod
+    def _encoder_probe_result():
+        return types.SimpleNamespace(
+            returncode=0,
+            stdout=(
+                " V....D libx264              libx264 H.264\n"
+                " V....D libopenh264          OpenH264\n"
+                " V....D h264_nvenc           NVIDIA NVENC H.264\n"
+            ),
+            stderr="",
+        )
+
+    @staticmethod
+    def _used_concat_codecs(run_mock):
+        codecs = []
+        for call in run_mock.call_args_list:
+            command = call.args[0]
+            if "-c:v" in command:
+                codecs.append(command[command.index("-c:v") + 1])
+        return codecs
 
     def test_delete_files_deduplicates_paths_and_ignores_missing_files(self):
         """
@@ -126,12 +155,8 @@ class TestVideoService(unittest.TestCase):
         source_video.with_audio_result = final_video
 
         with (
-            patch.object(
-                vd, "_open_video_clip_quietly", return_value=source_video
-            ),
-            patch.object(
-                vd, "AudioFileClip", side_effect=[voice_source, bgm_source]
-            ),
+            patch.object(vd, "_open_video_clip_quietly", return_value=source_video),
+            patch.object(vd, "AudioFileClip", side_effect=[voice_source, bgm_source]),
             patch.object(vd, "CompositeAudioClip", return_value=mixed_audio),
             patch.object(vd, "_write_videofile_with_codec_fallback") as writer,
             patch.object(vd, "_get_configured_video_codec", return_value="libx264"),
@@ -166,9 +191,7 @@ class TestVideoService(unittest.TestCase):
         source_video.with_audio_result = final_video
 
         with (
-            patch.object(
-                vd, "_open_video_clip_quietly", return_value=source_video
-            ),
+            patch.object(vd, "_open_video_clip_quietly", return_value=source_video),
             patch.object(
                 vd,
                 "AudioFileClip",
@@ -229,9 +252,7 @@ class TestVideoService(unittest.TestCase):
                     ) as audio_file_clip,
                     patch.object(vd, "get_bgm_file") as get_bgm_file,
                     patch.object(vd, "CompositeAudioClip") as composite_audio,
-                    patch.object(
-                        vd, "_write_videofile_with_codec_fallback"
-                    ) as writer,
+                    patch.object(vd, "_write_videofile_with_codec_fallback") as writer,
                     patch.object(
                         vd, "_get_configured_video_codec", return_value="libx264"
                     ),
@@ -404,7 +425,9 @@ class TestVideoService(unittest.TestCase):
 
     def test_get_ffmpeg_binary_uses_configured_env_path(self):
         """配置中显式指定 ffmpeg 时，应优先使用该路径。"""
-        with patch.dict(os.environ, {"IMAGEIO_FFMPEG_EXE": "/tmp/custom-ffmpeg"}, clear=True):
+        with patch.dict(
+            os.environ, {"IMAGEIO_FFMPEG_EXE": "/tmp/custom-ffmpeg"}, clear=True
+        ):
             self.assertEqual(utils.get_ffmpeg_binary(), "/tmp/custom-ffmpeg")
 
     def test_get_ffmpeg_binary_falls_back_to_imageio_ffmpeg(self):
@@ -416,10 +439,75 @@ class TestVideoService(unittest.TestCase):
             get_ffmpeg_exe=lambda: "/tmp/bundled-ffmpeg"
         )
 
-        with patch.dict(os.environ, {}, clear=True), patch.object(
-            utils.shutil, "which", return_value=None
-        ), patch.dict(sys.modules, {"imageio_ffmpeg": fake_imageio_ffmpeg}):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(utils.shutil, "which", return_value=None),
+            patch.dict(sys.modules, {"imageio_ffmpeg": fake_imageio_ffmpeg}),
+        ):
             self.assertEqual(utils.get_ffmpeg_binary(), "/tmp/bundled-ffmpeg")
+
+    def test_get_ffmpeg_binary_skips_system_build_without_libx264(self):
+        """
+        Fedora ffmpeg-free 等发行版构建没有 libx264。MoviePy 已经用
+        imageio-ffmpeg 自带的完整构建写出片段；concat 如果继续用系统
+        ffmpeg 并请求 libx264，会在合并阶段报 Unknown encoder。
+        系统二进制缺 libx264、捆绑构建有时，应改用捆绑构建。
+        """
+        fake_imageio_ffmpeg = types.SimpleNamespace(
+            get_ffmpeg_exe=lambda: "/tmp/bundled-ffmpeg"
+        )
+
+        def fake_run(command, **_kwargs):
+            binary = command[0]
+            stdout = ""
+            if binary == "/usr/bin/ffmpeg":
+                stdout = " V....D libopenh264              OpenH264\n"
+            elif binary == "/tmp/bundled-ffmpeg":
+                stdout = " V....D libx264              libx264 H.264\n"
+            return types.SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(utils.shutil, "which", return_value="/usr/bin/ffmpeg"),
+            patch.object(utils.subprocess, "run", side_effect=fake_run),
+            patch.dict(sys.modules, {"imageio_ffmpeg": fake_imageio_ffmpeg}),
+        ):
+            self.assertEqual(utils.get_ffmpeg_binary(), "/tmp/bundled-ffmpeg")
+
+    def test_get_ffmpeg_binary_keeps_system_build_with_libx264(self):
+        """系统 ffmpeg 已包含 libx264 时仍应优先用它，避免无故改走捆绑构建。"""
+        fake_imageio_ffmpeg = types.SimpleNamespace(
+            get_ffmpeg_exe=lambda: "/tmp/bundled-ffmpeg"
+        )
+
+        def fake_run(command, **_kwargs):
+            return types.SimpleNamespace(
+                returncode=0,
+                stdout=" V....D libx264              libx264 H.264\n",
+                stderr="",
+            )
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(utils.shutil, "which", return_value="/usr/bin/ffmpeg"),
+            patch.object(utils.subprocess, "run", side_effect=fake_run),
+            patch.dict(sys.modules, {"imageio_ffmpeg": fake_imageio_ffmpeg}),
+        ):
+            self.assertEqual(utils.get_ffmpeg_binary(), "/usr/bin/ffmpeg")
+
+    def test_get_effective_video_codec_uses_openh264_when_libx264_missing(self):
+        """
+        默认策略仍是 libx264，但必须先探测当前 FFmpeg 是否真有该编码器。
+        只有 libopenh264 时（Fedora ffmpeg-free）应改用它，而不是把
+        Unknown encoder libx264 留到 concat 才爆。
+        """
+        config.app.pop("video_codec", None)
+
+        def exists(_binary, codec):
+            return codec == "libopenh264"
+
+        with patch.object(vd, "_ffmpeg_encoder_exists", side_effect=exists):
+            self.assertEqual(vd._get_effective_video_codec(), "libopenh264")
 
     def test_get_effective_video_codec_falls_back_when_encoder_missing(self):
         """
@@ -459,7 +547,9 @@ class TestVideoService(unittest.TestCase):
             "run",
             side_effect=OSError("permission denied"),
         ):
-            self.assertFalse(vd._ffmpeg_encoder_exists("C:/ffmpeg/bin/ffmpeg.exe", "h264_nvenc"))
+            self.assertFalse(
+                vd._ffmpeg_encoder_exists("C:/ffmpeg/bin/ffmpeg.exe", "h264_nvenc")
+            )
 
     def test_write_videofile_falls_back_after_runtime_encoder_failure(self):
         """
@@ -524,9 +614,7 @@ class TestVideoService(unittest.TestCase):
             return_value=r"C:\Users\Test User's Videos\clip.mp4",
         ):
             self.assertEqual(
-                vd._format_ffmpeg_concat_path(
-                    r"C:\Users\Test User's Videos\clip.mp4"
-                ),
+                vd._format_ffmpeg_concat_path(r"C:\Users\Test User's Videos\clip.mp4"),
                 "C:/Users/Test User'\\''s Videos/clip.mp4",
             )
 
@@ -537,9 +625,10 @@ class TestVideoService(unittest.TestCase):
         """
         config.app["video_codec"] = "h264_nvenc"
 
-        def fake_run(command, capture_output, text, check):
-            codec_index = command.index("-c:v") + 1
-            codec = command[codec_index]
+        def fake_run(command, **_kwargs):
+            if "-encoders" in command:
+                return self._encoder_probe_result()
+            codec = command[command.index("-c:v") + 1]
             if codec == "h264_nvenc":
                 return types.SimpleNamespace(
                     returncode=1,
@@ -562,12 +651,65 @@ class TestVideoService(unittest.TestCase):
                         output_dir=temp_dir,
                     )
 
-        used_codecs = [
-            call.args[0][call.args[0].index("-c:v") + 1]
-            for call in run.call_args_list
-        ]
-        self.assertEqual(used_codecs, ["h264_nvenc", "libx264"])
+        self.assertEqual(self._used_concat_codecs(run), ["h264_nvenc", "libx264"])
         self.assertIn("h264_nvenc", vd._runtime_disabled_video_codecs)
+
+    def test_concat_video_clips_uses_openh264_when_libx264_missing(self):
+        """
+        concat 走系统 FFmpeg 时，缺 libx264 必须直接选用已探测到的
+        libopenh264，而不是先写死 libx264 再失败。
+        """
+        config.app.pop("video_codec", None)
+
+        def exists(_binary, codec):
+            return codec == "libopenh264"
+
+        def fake_run(command, **_kwargs):
+            if "-encoders" in command:
+                return self._encoder_probe_result()
+            return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            clip_file = os.path.join(temp_dir, "clip.mp4")
+            output_file = os.path.join(temp_dir, "combined.mp4")
+            Path(clip_file).write_bytes(b"fake")
+
+            with patch.object(vd, "_ffmpeg_encoder_exists", side_effect=exists):
+                with patch.object(vd.subprocess, "run", side_effect=fake_run) as run:
+                    vd.concat_video_clips_with_ffmpeg(
+                        clip_files=[clip_file],
+                        output_file=output_file,
+                        threads=1,
+                        output_dir=temp_dir,
+                    )
+
+        self.assertEqual(self._used_concat_codecs(run), ["libopenh264"])
+
+    def test_write_videofile_uses_openh264_when_libx264_missing(self):
+        """MoviePy 写出同样不能在当前 FFmpeg 没有 libx264 时仍传入该编码器。"""
+
+        class _FakeClip:
+            def __init__(self):
+                self.codecs = []
+
+            def write_videofile(self, output_file, codec, **kwargs):
+                self.codecs.append(codec)
+
+        def exists(_binary, codec):
+            return codec == "libopenh264"
+
+        fake_clip = _FakeClip()
+        with patch.object(vd, "_ffmpeg_encoder_exists", side_effect=exists):
+            used_codec = vd._write_videofile_with_codec_fallback(
+                fake_clip,
+                "/tmp/fake.mp4",
+                codec="libx264",
+                logger=None,
+                fps=30,
+            )
+
+        self.assertEqual(used_codec, "libopenh264")
+        self.assertEqual(fake_clip.codecs, ["libopenh264"])
 
     def test_concat_video_clips_does_not_disable_codec_when_fallback_also_fails(self):
         """
@@ -576,9 +718,10 @@ class TestVideoService(unittest.TestCase):
         """
         config.app["video_codec"] = "h264_nvenc"
 
-        def fake_run(command, capture_output, text, check):
-            codec_index = command.index("-c:v") + 1
-            codec = command[codec_index]
+        def fake_run(command, **_kwargs):
+            if "-encoders" in command:
+                return self._encoder_probe_result()
+            codec = command[command.index("-c:v") + 1]
             return types.SimpleNamespace(
                 returncode=1,
                 stdout="",
@@ -675,6 +818,7 @@ class TestVideoService(unittest.TestCase):
         Ensure `combine_videos` safely handles
         `video_transition_mode=None`.
         """
+
         class _FakeAudioClip:
             @property
             def duration(self):
@@ -848,7 +992,9 @@ class TestVideoService(unittest.TestCase):
                     with patch.object(
                         vd, "_write_videofile_with_codec_fallback"
                     ) as write_mock:
-                        with patch.object(vd, "concat_video_clips_with_ffmpeg") as concat_mock:
+                        with patch.object(
+                            vd, "concat_video_clips_with_ffmpeg"
+                        ) as concat_mock:
                             with patch.object(vd, "delete_files"):
                                 result = vd.combine_videos(
                                     combined_video_path=combined_video_path,
@@ -867,7 +1013,9 @@ class TestVideoService(unittest.TestCase):
     def test_concat_video_clips_limits_output_to_audio_duration(self):
         """最终拼接时应裁到音频时长，避免安全余量带来明显静音尾巴。"""
 
-        def fake_run(command, capture_output, text, check):
+        def fake_run(command, **_kwargs):
+            if "-encoders" in command:
+                return self._encoder_probe_result()
             return types.SimpleNamespace(returncode=0, stdout="", stderr="")
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -932,15 +1080,9 @@ class TestVideoService(unittest.TestCase):
         同一个源素材的最后一个切片可能短于目标片段时长。首轮去重时应优先
         选择较长片段，否则会因为累计时长不足而提前复用素材。
         """
-        short_tail = vd.SubClippedVideoClip(
-            "a.mp4", 6, 6.5, source_file_path="a.mp4"
-        )
-        full_clip = vd.SubClippedVideoClip(
-            "a.mp4", 0, 3, source_file_path="a.mp4"
-        )
-        other_source = vd.SubClippedVideoClip(
-            "b.mp4", 0, 3, source_file_path="b.mp4"
-        )
+        short_tail = vd.SubClippedVideoClip("a.mp4", 6, 6.5, source_file_path="a.mp4")
+        full_clip = vd.SubClippedVideoClip("a.mp4", 0, 3, source_file_path="a.mp4")
+        other_source = vd.SubClippedVideoClip("b.mp4", 0, 3, source_file_path="b.mp4")
 
         ordered_clips = vd._prioritize_unique_source_clips(
             subclipped_items=[short_tail, full_clip, other_source],
@@ -951,35 +1093,33 @@ class TestVideoService(unittest.TestCase):
             clip for clip in ordered_clips if clip.source_file_path == "a.mp4"
         )
         self.assertEqual(first_a_clip, full_clip)
-    
+
     def test_wrap_text(self):
         """test text wrapping function"""
         try:
             font_path = os.path.join(utils.font_dir(), "STHeitiMedium.ttc")
             if not os.path.exists(font_path):
                 self.fail(f"font file not found: {font_path}")
-                
+
             # test english text wrapping
-            test_text_en = "This is a test text for wrapping long sentences in english language"
-            
+            test_text_en = (
+                "This is a test text for wrapping long sentences in english language"
+            )
+
             wrapped_text_en, text_height_en = vd.wrap_text(
-                text=test_text_en,
-                max_width=300,
-                font=font_path,
-                fontsize=30
+                text=test_text_en, max_width=300, font=font_path, fontsize=30
             )
             print(wrapped_text_en, text_height_en)
             # verify text is wrapped
             self.assertIn("\n", wrapped_text_en)
-            
+
             # test chinese text wrapping
-            test_text_zh = "这是一段用来测试中文长句换行的文本内容，应该会根据宽度限制进行换行处理"
+            test_text_zh = (
+                "这是一段用来测试中文长句换行的文本内容，应该会根据宽度限制进行换行处理"
+            )
             wrapped_text_zh, text_height_zh = vd.wrap_text(
-                text=test_text_zh,
-                max_width=300,
-                font=font_path,
-                fontsize=30
-            )   
+                text=test_text_zh, max_width=300, font=font_path, fontsize=30
+            )
             print(wrapped_text_zh, text_height_zh)
             # verify chinese text is wrapped
             self.assertIn("\n", wrapped_text_zh)
@@ -1021,6 +1161,57 @@ class TestVideoService(unittest.TestCase):
                 with patch("sys.platform", platform):
                     result = vd._get_temp_audio_dir("/some/output/dir")
                     self.assertEqual(result, "/some/output/dir")
+
+
+class TestNormalizeAudioLoudness(unittest.TestCase):
+    def test_missing_file_returns_false_without_running_ffmpeg(self):
+        with patch.object(vd.subprocess, "run") as run:
+            self.assertFalse(vd.normalize_audio_loudness("/nonexistent/final.mp4"))
+        run.assert_not_called()
+
+    def test_ffmpeg_failure_keeps_original_and_cleans_temp(self):
+        """响度标准化失败绝不能破坏已经渲染完成的成片。"""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            video_file = os.path.join(tmp_dir, "final-1.mp4")
+            with open(video_file, "wb") as f:
+                f.write(b"original")
+
+            def fake_run(command, **kwargs):
+                # 模拟 ffmpeg 写出了半截临时文件后失败退出。
+                with open(command[-1], "wb") as f:
+                    f.write(b"partial")
+                return types.SimpleNamespace(returncode=1, stderr="boom", stdout="")
+
+            with patch.object(vd.subprocess, "run", side_effect=fake_run):
+                self.assertFalse(vd.normalize_audio_loudness(video_file))
+
+            with open(video_file, "rb") as f:
+                self.assertEqual(f.read(), b"original")
+            self.assertEqual(os.listdir(tmp_dir), ["final-1.mp4"])
+
+    def test_success_replaces_original_with_normalized_output(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            video_file = os.path.join(tmp_dir, "final-1.mp4")
+            with open(video_file, "wb") as f:
+                f.write(b"original")
+
+            captured = {}
+
+            def fake_run(command, **kwargs):
+                captured["command"] = command
+                with open(command[-1], "wb") as f:
+                    f.write(b"normalized")
+                return types.SimpleNamespace(returncode=0, stderr="", stdout="")
+
+            with patch.object(vd.subprocess, "run", side_effect=fake_run):
+                self.assertTrue(vd.normalize_audio_loudness(video_file))
+
+            with open(video_file, "rb") as f:
+                self.assertEqual(f.read(), b"normalized")
+            self.assertEqual(os.listdir(tmp_dir), ["final-1.mp4"])
+            command_text = " ".join(captured["command"])
+            self.assertIn("loudnorm=I=-14.0:TP=-1.5:LRA=11.0", command_text)
+            self.assertIn("-c:v copy", command_text)
 
 
 class TestMaterialResolutionTolerance(unittest.TestCase):

@@ -286,9 +286,61 @@ def generate_script(task_id, params):
     return video_script
 
 
+# 生成式 b-roll 源：素材来自文生视频模型而不是素材库检索。
+GENERATIVE_VIDEO_SOURCES = ("imagine", "kie")
+
+# 平均每条关键词达到这个词数时，认为用户提供的已经是场景描述而不是
+# 搜索关键词，不再让 LLM 重写，尊重用户的手工输入。
+_SCENE_PROMPT_MIN_AVG_WORDS = 6
+
+
+def _generative_clip_budget(params) -> int:
+    """当前生成式素材源单次任务允许提交的片段数上限。"""
+    key = "imagine_max_clips" if params.video_source == "imagine" else "kie_max_clips"
+    try:
+        budget = int(config.app.get(key, 3))
+    except (TypeError, ValueError):
+        budget = 3
+    return max(1, budget)
+
+
+def _terms_look_like_scene_prompts(video_terms) -> bool:
+    terms = [str(t).strip() for t in video_terms if str(t).strip()]
+    if not terms:
+        return False
+    total_words = sum(len(t.split()) for t in terms)
+    return total_words / len(terms) >= _SCENE_PROMPT_MIN_AVG_WORDS
+
+
 def generate_terms(task_id, params, video_script):
     logger.info("\n\n## generating video terms")
     video_terms = params.video_terms
+
+    # 文生视频模型拿到几个近义搜索关键词会产出几段几乎一样的画面。生成式
+    # 素材源统一升级为按脚本顺序的多样化场景描述；LLM 失败时回退到原有的
+    # 搜索关键词逻辑，保证任务不因此中断。
+    if params.video_source in GENERATIVE_VIDEO_SOURCES:
+        provided_terms = []
+        if isinstance(video_terms, str):
+            provided_terms = [t.strip() for t in re.split(r"[,，]", video_terms)]
+        elif isinstance(video_terms, list):
+            provided_terms = [str(t).strip() for t in video_terms]
+        provided_terms = [t for t in provided_terms if t]
+
+        if provided_terms and _terms_look_like_scene_prompts(provided_terms):
+            logger.info("provided terms already read as scene prompts, keeping them")
+            return provided_terms
+
+        scene_prompts = llm.generate_scene_prompts(
+            video_subject=params.video_subject,
+            video_script=video_script,
+            amount=_generative_clip_budget(params),
+        )
+        if scene_prompts:
+            # 场景顺序即脚本叙事顺序，跳过语义重排，直接返回。
+            return scene_prompts
+        logger.warning("scene prompt generation failed; falling back to search terms")
+
     if not video_terms:
         # 开启素材按文案顺序匹配后，关键词本身也必须按脚本叙事顺序生成；
         # 否则后续即使顺序下载和顺序拼接，也只能复用一组全局主题词，
@@ -749,6 +801,11 @@ def generate_final_videos(
                     "video_index": index,
                 }
             )
+
+        # 响度标准化放在成片渲染之后：视频流 copy 不重编码，失败保留原片。
+        # 配置开关默认开启，可用 normalize_audio = false 关闭。
+        if bool(config.app.get("normalize_audio", True)):
+            video.normalize_audio_loudness(final_video_path)
 
         _progress += 50 / params.video_count / 2
         sm.state.update_task(task_id, progress=_progress)

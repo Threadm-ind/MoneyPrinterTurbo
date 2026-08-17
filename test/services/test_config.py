@@ -32,7 +32,8 @@ class TestConfigPersistence:
         example_config = self._load_example_config()
         app_config = example_config["app"]
 
-        assert example_config["listen_host"] == "0.0.0.0"
+        # 示例配置默认回环地址：API 无鉴权时暴露到局域网必须是显式选择。
+        assert example_config["listen_host"] == "127.0.0.1"
         assert example_config["listen_port"] == 8080
         assert example_config["log_level"] == "DEBUG"
         assert app_config["video_source"] in {

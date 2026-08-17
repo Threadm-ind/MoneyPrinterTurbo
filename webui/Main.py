@@ -1984,6 +1984,7 @@ def _render_settings_dialog():
                 tr("Simple Mode"),
                 value=config.ui.get("simple_mode", False),
                 key="simple_mode_checkbox",
+                help=tr("Simple Mode Help"),
             )
             _set_runtime_config("ui", "simple_mode", simple_mode)
 
@@ -2530,6 +2531,7 @@ def _render_video_settings(panel, params):
                 format_func=lambda value: dict(
                     (v, label) for label, v in video_sources
                 )[value],
+                help=tr("Video Source Help"),
             )
             _set_runtime_config("app", "video_source", params.video_source)
 

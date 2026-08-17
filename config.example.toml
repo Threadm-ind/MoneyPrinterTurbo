@@ -8,7 +8,9 @@
 # Log level: DEBUG, INFO, WARNING, or ERROR.
 log_level = "DEBUG"
 # Use 127.0.0.1 for local-only access. 0.0.0.0 listens on all network interfaces.
-listen_host = "0.0.0.0"
+# Bind to loopback by default: the API has no authentication until you set
+# app.api_key, so exposing it on the LAN is opt-in, not the default.
+listen_host = "127.0.0.1"
 listen_port = 8080
 
 [app]
@@ -20,6 +22,11 @@ listen_port = 8080
 # Hide the basic configuration panel in the WebUI.
 # 是否隐藏 WebUI 基础配置面板。
 hide_config = false
+
+# Optional API token for /api/v1/*. Empty = no check (safe only because
+# listen_host defaults to 127.0.0.1 and CORS is off). Set a long random
+# value if you ever bind the API to the LAN.
+# api_key = ""
 
 # Timeout in seconds for a single Edge TTS streaming request.
 # 单次 Edge TTS 流式请求超时时间。慢网络可适当调大，设置为 0 表示禁用超时。
@@ -73,6 +80,16 @@ imagine_poll_timeout = 600
 imagine_fallback_to_pexels = true
 # 480p burns fewer credits; 720p / 1080p look better (1080p needs 1.5).
 imagine_resolution = "480p"
+
+# Generative sources ("imagine", "kie") automatically upgrade short search
+# keywords into script-ordered, visually distinct scene prompts so the clips
+# don't all look the same. Terms you provide yourself are kept as-is when they
+# already read as scene descriptions (6+ words each on average).
+
+# Normalize final video loudness to the short-video platform standard
+# (-14 LUFS) after rendering. The video stream is copied, only audio is
+# re-encoded; failures keep the original file.
+normalize_audio = true
 
 # Optional TwelveLabs integration for semantic material ranking and video QA.
 # Install the optional dependency with: uv sync --extra twelvelabs
@@ -254,9 +271,10 @@ subtitle_provider = "edge"
 # ffmpeg_path = ""
 
 # Leave unset to follow the app default (libx264). Hardware encoders are optional;
-# unsupported encoders automatically fall back to libx264.
-# Available values: "libx264", "h264_nvenc", "h264_amf", "h264_qsv",
-# "h264_mf", "h264_videotoolbox".
+# unsupported encoders automatically fall back to a software encoder the current
+# FFmpeg actually has (libx264, or libopenh264 on Fedora ffmpeg-free).
+# Available values: "libx264", "libopenh264", "h264_nvenc", "h264_amf",
+# "h264_qsv", "h264_mf", "h264_videotoolbox".
 # video_codec = "libx264"
 
 # -----------------------------------------------------------------------------

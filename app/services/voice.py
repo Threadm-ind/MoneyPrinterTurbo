@@ -36,8 +36,14 @@ MINIMAX_TTS_CN_URL = "https://api.minimaxi.com/v1/t2a_v2"
 MINIMAX_TTS_DEFAULT_MODEL = "speech-2.8-hd"
 MINIMAX_TTS_DEFAULT_VOICE = "English_expressive_narrator"
 MINIMAX_TTS_MODELS = (
-    "speech-2.8-hd", "speech-2.8-turbo", "speech-2.6-hd", "speech-2.6-turbo",
-    "speech-02-hd", "speech-02-turbo", "speech-01-hd", "speech-01-turbo",
+    "speech-2.8-hd",
+    "speech-2.8-turbo",
+    "speech-2.6-hd",
+    "speech-2.6-turbo",
+    "speech-02-hd",
+    "speech-02-turbo",
+    "speech-01-hd",
+    "speech-01-turbo",
 )
 _MINIMAX_TTS_MAX_AUDIO_HEX_CHARS = 100 * 1024 * 1024
 NO_VOICE_NAME = "no-voice"
@@ -96,14 +102,14 @@ def get_siliconflow_voices() -> list[str]:
 def get_gemini_voices() -> list[str]:
     """
     获取Gemini TTS的声音列表
-    
+
     Returns:
         声音列表，格式为 ["gemini:Zephyr-Female", "gemini:Puck-Male", ...]
     """
     # Gemini TTS支持的语音列表
     voices_with_gender = [
         ("Zephyr", "Female"),
-        ("Puck", "Male"), 
+        ("Puck", "Male"),
         ("Charon", "Male"),
         ("Kore", "Female"),
         ("Fenrir", "Male"),
@@ -118,12 +124,9 @@ def get_gemini_voices() -> list[str]:
         ("Orion", "Male"),
         ("Atlas", "Male"),
     ]
-    
+
     # 添加gemini:前缀，并格式化为显示名称
-    return [
-        f"gemini:{voice}-{gender}"
-        for voice, gender in voices_with_gender
-    ]
+    return [f"gemini:{voice}-{gender}" for voice, gender in voices_with_gender]
 
 
 def get_mimo_voices() -> list[str]:
@@ -323,7 +326,9 @@ def estimate_no_voice_duration(text: str) -> float:
 
     cjk_chars = len(re.findall(r"[\u4e00-\u9fff]", normalized_text))
     words = len(re.findall(r"[A-Za-z0-9]+", normalized_text))
-    ascii_word_chars = sum(len(word) for word in re.findall(r"[A-Za-z0-9]+", normalized_text))
+    ascii_word_chars = sum(
+        len(word) for word in re.findall(r"[A-Za-z0-9]+", normalized_text)
+    )
     other_text_chars = 0
     for char in normalized_text:
         # Unicode category 以 L 开头表示各语种字母，N 表示数字。前面已经单独
@@ -370,11 +375,14 @@ def generate_silent_audio(duration_seconds: float, output_file: str) -> bool:
     logger.info(
         f"generating silent audio for no-voice mode, duration: {duration_seconds:.2f}s"
     )
+    # 静音轨生成是本地 lavfi 合成，正常几秒内完成；不设超时的话 ffmpeg 一旦
+    # 卡住会占住唯一的任务槽直到重启。
     result = subprocess.run(
         command,
         capture_output=True,
         text=True,
         check=False,
+        timeout=300,
     )
     if result.returncode != 0:
         logger.error(
@@ -648,9 +656,7 @@ def get_edge_tts_timeout_seconds() -> Union[float, None]:
       `edge_tts_timeout = 60`；
     - 设置为 0 或负数表示显式禁用超时，保留完全向后兼容。
     """
-    raw_timeout = config.app.get(
-        "edge_tts_timeout", _DEFAULT_EDGE_TTS_TIMEOUT_SECONDS
-    )
+    raw_timeout = config.app.get("edge_tts_timeout", _DEFAULT_EDGE_TTS_TIMEOUT_SECONDS)
     try:
         timeout_seconds = float(raw_timeout)
     except (TypeError, ValueError):
@@ -700,14 +706,10 @@ def _stream_edge_tts_sync_with_timeout(
     while True:
         remaining_seconds = deadline - time.monotonic()
         if remaining_seconds <= 0:
-            raise TimeoutError(
-                f"edge_tts stream timed out after {timeout_seconds:g}s"
-            )
+            raise TimeoutError(f"edge_tts stream timed out after {timeout_seconds:g}s")
 
         try:
-            item_type, payload = stream_queue.get(
-                timeout=min(0.5, remaining_seconds)
-            )
+            item_type, payload = stream_queue.get(timeout=min(0.5, remaining_seconds))
         except queue.Empty:
             continue
 
@@ -736,9 +738,7 @@ def stream_edge_tts_chunks(
     """
     if hasattr(communicate, "stream_sync"):
         if timeout_seconds:
-            _stream_edge_tts_sync_with_timeout(
-                communicate, on_chunk, timeout_seconds
-            )
+            _stream_edge_tts_sync_with_timeout(communicate, on_chunk, timeout_seconds)
             return
 
         for chunk in communicate.stream_sync():
@@ -785,6 +785,7 @@ def azure_tts_v1(
             timeout_seconds = get_edge_tts_timeout_seconds()
 
             with open(voice_file, "wb") as file:
+
                 def _handle_chunk(chunk):
                     chunk_type = chunk["type"]
                     if chunk_type == "audio":
@@ -972,9 +973,7 @@ def _build_azure_v2_ssml(text: str, voice_name: str, voice_rate: float) -> str:
 
     voice_locale_parts = voice_name.split("-", 2)
     voice_locale = (
-        "-".join(voice_locale_parts[:2])
-        if len(voice_locale_parts) >= 2
-        else "en-US"
+        "-".join(voice_locale_parts[:2]) if len(voice_locale_parts) >= 2 else "en-US"
     )
     escaped_text = escape(text)
     escaped_voice_name = escape(voice_name, {'"': "&quot;"})
@@ -1101,14 +1100,14 @@ def gemini_tts(
 ) -> Union[SubMaker, None]:
     """
     使用Google Gemini TTS生成语音
-    
+
     Args:
         text: 要转换的文本
         voice_name: 语音名称，如 "Zephyr", "Puck" 等
         voice_rate: 语音速率（当前未使用）
         voice_file: 输出音频文件路径
         voice_volume: 音频音量（当前未使用）
-        
+
     Returns:
         SubMaker对象或None
     """
@@ -1117,8 +1116,9 @@ def gemini_tts(
     from pydub import AudioSegment
     from google import genai
     from google.genai import types
+
     _configure_pydub_ffmpeg(AudioSegment)
-    
+
     try:
         api_key = config.app.get("gemini_api_key", "")
         if not api_key:
@@ -1151,18 +1151,18 @@ def gemini_tts(
         if not response.candidates or not response.candidates[0].content:
             logger.error("No audio content received from Gemini TTS")
             return None
-            
+
         # 获取音频数据
         audio_data = None
         for part in response.candidates[0].content.parts:
-            if hasattr(part, 'inline_data') and part.inline_data:
+            if hasattr(part, "inline_data") and part.inline_data:
                 audio_data = part.inline_data.data
                 break
-                
+
         if not audio_data:
             logger.error("No audio data found in response")
             return None
-            
+
         # 音频数据已经是原始字节，不需要base64解码
         if isinstance(audio_data, str):
             # 如果是字符串，则需要base64解码
@@ -1170,23 +1170,23 @@ def gemini_tts(
         else:
             # 如果已经是字节，直接使用
             audio_bytes = audio_data
-        
+
         # 尝试不同的音频格式 - Gemini可能返回不同的格式
         audio_segment = None
-        
+
         # Gemini返回Linear PCM格式，按照文档参数解析
         try:
             audio_segment = AudioSegment.from_file(
-                io.BytesIO(audio_bytes), 
+                io.BytesIO(audio_bytes),
                 format="raw",
                 frame_rate=24000,  # Gemini TTS默认采样率
-                channels=1,        # 单声道
-                sample_width=2     # 16-bit
+                channels=1,  # 单声道
+                sample_width=2,  # 16-bit
             )
         except Exception as e:
             logger.error(f"Failed to load PCM audio: {e}")
             return None
-        
+
         # API、CLI 或测试可以直接把尚不存在的嵌套目录作为输出位置。这里在
         # 真正写文件前统一创建父目录，避免一次成功的 Gemini 请求最后因为
         # 本地路径不存在而丢失结果，也让该 provider 与其他 TTS 实现行为一致。
@@ -1196,9 +1196,9 @@ def gemini_tts(
         # 会持续累积，并在 Windows 上增加后续覆盖或删除音频文件失败的概率。
         exported_audio = audio_segment.export(voice_file, format="mp3")
         exported_audio.close()
-        
+
         logger.info(f"completed, output file: {voice_file}")
-        
+
         # Gemini 拿不到 edge_tts 那种逐词边界事件，因此这里退回到
         # 项目原有的 `subs/offset` 兼容结构，至少保证后续字幕与时长
         # 计算链路可继续工作。
@@ -1209,9 +1209,11 @@ def gemini_tts(
             text=text,
             audio_duration_seconds=audio_duration,
         )
-        
+
     except ImportError as e:
-        logger.error(f"Missing required package for Gemini TTS: {str(e)}. Please install: pip install pydub")
+        logger.error(
+            f"Missing required package for Gemini TTS: {str(e)}. Please install: pip install pydub"
+        )
         return None
     except Exception as e:
         logger.error(f"Gemini TTS failed, error: {str(e)}")
@@ -1291,7 +1293,9 @@ def mimo_tts(
                 raise ValueError("MiMo TTS returned empty audio data")
 
             audio_bytes = base64.b64decode(audio_data)
-            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="wav")
+            audio_segment = AudioSegment.from_file(
+                io.BytesIO(audio_bytes), format="wav"
+            )
 
             output_format = utils.parse_extension(voice_file) or "mp3"
             if output_format == "wav":
@@ -1389,12 +1393,10 @@ def get_minimax_voice_catalog(
         raise ValueError("MiniMax TTS API key is not set")
 
     tts_endpoint = (
-        _resolve_minimax_tts_url(endpoint)
-        if endpoint
-        else get_minimax_tts_endpoint()
+        _resolve_minimax_tts_url(endpoint) if endpoint else get_minimax_tts_endpoint()
     )
     voice_endpoint = (
-        f"{tts_endpoint[:-len('/t2a_v2')]}/get_voice"
+        f"{tts_endpoint[: -len('/t2a_v2')]}/get_voice"
         if tts_endpoint.endswith("/t2a_v2")
         else f"{tts_endpoint.rstrip('/')}/get_voice"
     )
@@ -1483,7 +1485,13 @@ def _write_validated_minimax_audio(audio_bytes: bytes, voice_file: str) -> float
             os.remove(temp_path)
 
 
-def minimax_tts(text: str, voice_id: str, voice_rate: float, voice_file: str, voice_volume: float = 1.0) -> Union[SubMaker, None]:
+def minimax_tts(
+    text: str,
+    voice_id: str,
+    voice_rate: float,
+    voice_file: str,
+    voice_volume: float = 1.0,
+) -> Union[SubMaker, None]:
     """Generate speech with the synchronous MiniMax T2A HTTP API."""
     text, voice_id = (text or "").strip(), (voice_id or "").strip()
     if not text or not voice_id:
@@ -1495,7 +1503,9 @@ def minimax_tts(text: str, voice_id: str, voice_rate: float, voice_file: str, vo
         logger.error("MiniMax TTS API key is not set")
         return None
     url = get_minimax_tts_endpoint()
-    model = str(settings.get("model_id", MINIMAX_TTS_DEFAULT_MODEL) or MINIMAX_TTS_DEFAULT_MODEL).strip()
+    model = str(
+        settings.get("model_id", MINIMAX_TTS_DEFAULT_MODEL) or MINIMAX_TTS_DEFAULT_MODEL
+    ).strip()
     if model not in MINIMAX_TTS_MODELS:
         logger.error(f"Unsupported MiniMax TTS model: {model}")
         return None
@@ -1514,32 +1524,56 @@ def minimax_tts(text: str, voice_id: str, voice_rate: float, voice_file: str, vo
         logger.error(f"Unsupported MiniMax TTS audio format: {audio_format}")
         return None
     payload = {
-        "model": model, "text": text, "stream": False, "language_boost": "auto", "output_format": "hex",
-        "voice_setting": {"voice_id": voice_id, "speed": speed, "vol": volume, "pitch": pitch},
-        "audio_setting": {"sample_rate": sample_rate, "bitrate": bitrate, "format": audio_format, "channel": channel},
+        "model": model,
+        "text": text,
+        "stream": False,
+        "language_boost": "auto",
+        "output_format": "hex",
+        "voice_setting": {
+            "voice_id": voice_id,
+            "speed": speed,
+            "vol": volume,
+            "pitch": pitch,
+        },
+        "audio_setting": {
+            "sample_rate": sample_rate,
+            "bitrate": bitrate,
+            "format": audio_format,
+            "channel": channel,
+        },
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     for attempt in range(3):
         try:
-            logger.info(f"start MiniMax TTS, model: {model}, voice: {voice_id}, try: {attempt + 1}")
+            logger.info(
+                f"start MiniMax TTS, model: {model}, voice: {voice_id}, try: {attempt + 1}"
+            )
             response = requests.post(url, json=payload, headers=headers, timeout=120)
             if response.status_code != 200:
-                logger.error(f"MiniMax TTS failed with status {response.status_code}: {response.text[:200]}")
+                logger.error(
+                    f"MiniMax TTS failed with status {response.status_code}: {response.text[:200]}"
+                )
                 continue
             body = response.json()
             data = body.get("data") or {}
             base_resp = body.get("base_resp") or {}
             if base_resp.get("status_code") != 0 or data.get("status") != 2:
-                logger.error(f"MiniMax TTS returned an unsuccessful response: status_code={base_resp.get('status_code')}, audio_status={data.get('status')}")
+                logger.error(
+                    f"MiniMax TTS returned an unsuccessful response: status_code={base_resp.get('status_code')}, audio_status={data.get('status')}"
+                )
                 continue
             audio_hex = data.get("audio")
             if not isinstance(audio_hex, str) or not audio_hex:
                 logger.error("MiniMax TTS returned empty audio data")
                 continue
             if len(audio_hex) > _MINIMAX_TTS_MAX_AUDIO_HEX_CHARS:
-                logger.error("MiniMax TTS returned audio data exceeding the supported size")
+                logger.error(
+                    "MiniMax TTS returned audio data exceeding the supported size"
+                )
                 continue
-            audio_duration = _write_validated_minimax_audio(bytes.fromhex(audio_hex), voice_file)
+            audio_duration = _write_validated_minimax_audio(
+                bytes.fromhex(audio_hex), voice_file
+            )
             logger.success(f"MiniMax TTS succeeded: {voice_file}")
             return populate_legacy_submaker_with_full_text(
                 ensure_legacy_submaker_fields(SubMaker()), text, audio_duration
@@ -1605,7 +1639,10 @@ def elevenlabs_tts(
                 except Exception:
                     pass
 
-                if response.status_code in _NON_RETRYABLE_CODES or error_status in _NON_RETRYABLE_STATUSES:
+                if (
+                    response.status_code in _NON_RETRYABLE_CODES
+                    or error_status in _NON_RETRYABLE_STATUSES
+                ):
                     logger.error(
                         f"ElevenLabs TTS failed (non-retryable) — voice_id: {voice_id}, "
                         f"status: {response.status_code}, error: {error_status or response.text[:200]}. "
@@ -1763,7 +1800,7 @@ def _build_subtitle_formatter():
 
 # 阿拉伯语变音符号和 Tatweel 拉长符在 edge-tts 返回文本中可能出现，
 # 这些字符不影响语义，但会导致脚本文本和字幕 cue 字符串精确匹配失败。
-_ARABIC_DIACRITICS = re.compile("[\u0610-\u061A\u064B-\u065F\u0670\u0640\u06D6-\u06ED]")
+_ARABIC_DIACRITICS = re.compile("[\u0610-\u061a\u064b-\u065f\u0670\u0640\u06d6-\u06ed]")
 
 
 def _normalize_arabic(text: str) -> str:
@@ -1785,7 +1822,9 @@ def _normalize_arabic(text: str) -> str:
     return text
 
 
-def _match_script_line(script_lines: list[str], current_text: str, sub_index: int) -> str:
+def _match_script_line(
+    script_lines: list[str], current_text: str, sub_index: int
+) -> str:
     """
     尝试把当前累计的字幕文本，与脚本中的某一条标准断句匹配起来。
 
@@ -1990,6 +2029,7 @@ def _get_audio_duration_from_submaker(sub_maker: SubMaker):
         return 0.0
     return legacy_offsets[-1][1] / 10000000
 
+
 def _get_audio_duration_from_file(audio_file: str) -> float:
     """
     获取音频文件时长（支持 mp3/m4a/wav/aac 等 ffmpeg 可解码的格式）
@@ -2006,6 +2046,7 @@ def _get_audio_duration_from_file(audio_file: str) -> float:
         logger.error(f"Failed to get audio duration from file: {str(e)}")
         return 0.0
 
+
 def get_audio_duration(target: Union[str, SubMaker]) -> float:
     """
     获取音频时长
@@ -2019,6 +2060,7 @@ def get_audio_duration(target: Union[str, SubMaker]) -> float:
     else:
         logger.error(f"Invalid target type: {type(target)}")
         return 0.0
+
 
 if __name__ == "__main__":
     voice_name = "zh-CN-XiaoxiaoMultilingualNeural-V2-Female"

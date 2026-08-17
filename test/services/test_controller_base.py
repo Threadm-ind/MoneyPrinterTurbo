@@ -44,6 +44,11 @@ class TestControllerAuthentication(unittest.TestCase):
 
         self.assertIsNone(result)
 
+    def test_verify_token_allows_empty_configured_key(self):
+        """未配置 api_key 时本机单用户场景继续放行，避免锁死本地 WebUI。"""
+        config.app["api_key"] = ""
+        self.assertIsNone(base.verify_token(self._request()))
+
     def test_verify_token_rejects_missing_or_wrong_key(self):
         """
         缺失和错误的 API Key 都必须返回 401，并保留客户端 request ID，

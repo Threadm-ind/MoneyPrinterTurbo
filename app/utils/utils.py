@@ -3,6 +3,7 @@ import math
 import os
 import re
 import shutil
+import subprocess
 from functools import lru_cache
 from pathlib import Path
 import threading
@@ -142,6 +143,47 @@ def public_dir(sub_dir: str = ""):
     return d
 
 
+@lru_cache(maxsize=16)
+def ffmpeg_has_encoder(ffmpeg_binary: str, codec: str) -> bool:
+    """
+    检查指定 FFmpeg 二进制是否声明了某个编码器。
+
+    只证明编译时包含该 encoder，不证明当前硬件一定能跑。匹配编码器
+    名称本身，避免 `h264` 这类短名字误命中整份 encoder 列表。
+    """
+    if not ffmpeg_binary or not codec:
+        return False
+    try:
+        result = subprocess.run(
+            [ffmpeg_binary, "-hide_banner", "-encoders"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    if result.returncode != 0:
+        return False
+    for line in (result.stdout or "").splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[1] == codec:
+            return True
+    return False
+
+
+def _bundled_ffmpeg_binary() -> str:
+    try:
+        import imageio_ffmpeg
+
+        bundled_ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        if bundled_ffmpeg:
+            return bundled_ffmpeg
+    except Exception as exc:
+        logger.warning(f"failed to resolve bundled ffmpeg binary: {str(exc)}")
+    return ""
+
+
 def get_ffmpeg_binary() -> str:
     """
     解析当前进程应该使用的 FFmpeg 可执行文件。
@@ -154,27 +196,29 @@ def get_ffmpeg_binary() -> str:
 
     优先级：
     1. IMAGEIO_FFMPEG_EXE：MoviePy/imageio 约定的显式配置；
-    2. 系统 PATH 中的 ffmpeg；
-    3. imageio-ffmpeg 依赖提供的内置二进制；
-    4. 字符串 "ffmpeg" 兜底，交给 subprocess 在运行时暴露更具体错误。
+    2. 系统 PATH 中带 libx264 的 ffmpeg（完整构建）；
+    3. imageio-ffmpeg 自带的、含 libx264 的捆绑构建。Fedora ffmpeg-free
+       等发行版没有 libx264，MoviePy 片段写出已经走捆绑构建，concat
+       必须用同一套二进制，否则会在合并阶段报 Unknown encoder；
+    4. 系统 PATH 中的 ffmpeg（可能只有 libopenh264）；
+    5. 捆绑构建（即使没有 libx264）；
+    6. 字符串 "ffmpeg" 兜底，交给 subprocess 在运行时暴露更具体错误。
     """
     configured_ffmpeg = os.environ.get("IMAGEIO_FFMPEG_EXE")
     if configured_ffmpeg:
         return configured_ffmpeg
 
     system_ffmpeg = shutil.which("ffmpeg")
+    bundled_ffmpeg = _bundled_ffmpeg_binary()
+
+    if system_ffmpeg and ffmpeg_has_encoder(system_ffmpeg, "libx264"):
+        return system_ffmpeg
+    if bundled_ffmpeg and ffmpeg_has_encoder(bundled_ffmpeg, "libx264"):
+        return bundled_ffmpeg
     if system_ffmpeg:
         return system_ffmpeg
-
-    try:
-        import imageio_ffmpeg
-
-        bundled_ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-        if bundled_ffmpeg:
-            return bundled_ffmpeg
-    except Exception as exc:
-        logger.warning(f"failed to resolve bundled ffmpeg binary: {str(exc)}")
-
+    if bundled_ffmpeg:
+        return bundled_ffmpeg
     return "ffmpeg"
 
 
@@ -361,4 +405,4 @@ def load_locales(i18n_dir):
 
 
 def parse_extension(filename):
-    return Path(filename).suffix.lower().lstrip('.')
+    return Path(filename).suffix.lower().lstrip(".")

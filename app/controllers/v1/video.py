@@ -28,7 +28,7 @@ from app.models.schema import (
     TaskResponse,
     TaskVideoRequest,
     VideoMaterialUploadResponse,
-    VideoMaterialRetrieveResponse
+    VideoMaterialRetrieveResponse,
 )
 from app.services import bgm as bgm_service
 from app.services import state as sm
@@ -36,8 +36,8 @@ from app.services import task as tm
 from app.utils import file_security, utils
 
 # 认证依赖项
-# router = new_router(dependencies=[Depends(base.verify_token)])
-router = new_router()
+# api_key 配置为空时 verify_token 直接放行，所以这里可以无条件挂上。
+router = new_router(dependencies=[Depends(base.verify_token)])
 
 _enable_redis = config.app.get("enable_redis", False)
 _redis_host = config.app.get("redis_host", "localhost")
@@ -75,7 +75,9 @@ def _sanitize_upload_filename(filename: str, request_id: str) -> str:
     return normalized_name
 
 
-def _resolve_path_within_directory(base_dir: str, unsafe_path: str, request_id: str) -> str:
+def _resolve_path_within_directory(
+    base_dir: str, unsafe_path: str, request_id: str
+) -> str:
     try:
         return file_security.resolve_path_within_directory(base_dir, unsafe_path)
     except ValueError as exc:
@@ -222,6 +224,7 @@ def create_task(
             task_id=task_id, status_code=400, message=f"{request_id}: {str(e)}"
         )
 
+
 @router.get("/tasks", response_model=TaskListResponse, summary="Get all tasks")
 def get_all_tasks(
     request: Request,
@@ -237,7 +240,6 @@ def get_all_tasks(
         "page_size": page_size,
     }
     return utils.get_response(200, response)
-
 
 
 @router.get(
@@ -370,8 +372,11 @@ def upload_bgm_file(request: Request, file: UploadFile = File(...)):
     response = {"file": safe_filename}
     return utils.get_response(200, response)
 
+
 @router.get(
-    "/video_materials", response_model=VideoMaterialRetrieveResponse, summary="Retrieve local video materials"
+    "/video_materials",
+    response_model=VideoMaterialRetrieveResponse,
+    summary="Retrieve local video materials",
 )
 def get_video_materials_list(request: Request):
     allowed_suffixes = ("mp4", "mov", "avi", "flv", "mkv", "jpg", "jpeg", "png")
@@ -414,17 +419,42 @@ def upload_video_material_file(request: Request, file: UploadFile = File(...)):
     if suffix in allowed_suffixes:
         local_videos_dir = utils.storage_dir("local_videos", create=True)
         save_path = os.path.join(local_videos_dir, safe_filename)
-        # save file
-        with open(save_path, "wb+") as buffer:
-            # If the file already exists, it will be overwritten
-            file.file.seek(0)
-            buffer.write(file.file.read())
+        # 分块落盘并设上限：一次性 read() 会把整个上传载入内存，而且没有
+        # 大小约束时磁盘可以被单个请求写满。超限即删除半成品并拒绝。
+        max_bytes = 512 * 1024 * 1024
+        written = 0
+        file.file.seek(0)
+        try:
+            with open(save_path, "wb") as buffer:
+                # If the file already exists, it will be overwritten
+                while True:
+                    chunk = file.file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > max_bytes:
+                        raise HttpException(
+                            "",
+                            status_code=413,
+                            message=(
+                                f"{request_id}: file exceeds the "
+                                f"{max_bytes // (1024 * 1024)}MB upload limit"
+                            ),
+                        )
+                    buffer.write(chunk)
+        except HttpException:
+            if os.path.isfile(save_path):
+                os.remove(save_path)
+            raise
         response = {"file": safe_filename}
         return utils.get_response(200, response)
 
     raise HttpException(
-        "", status_code=400, message=f"{request_id}: Only files with extensions {', '.join(allowed_suffixes)} can be uploaded"
+        "",
+        status_code=400,
+        message=f"{request_id}: Only files with extensions {', '.join(allowed_suffixes)} can be uploaded",
     )
+
 
 @router.get("/stream/{file_path:path}")
 async def stream_video(request: Request, file_path: str):

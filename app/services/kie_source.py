@@ -239,8 +239,8 @@ def generate_videos(
         record["state"] = "timeout"
         logger.error(
             f"kie task {record['kie_task_id']} ('{record['term']}') still pending "
-            f"after {poll_timeout}s; it may finish later — do NOT resubmit, "
-            f"check kie_tasks.json"
+            f"after {poll_timeout}s. It may finish on its own. Do not submit again "
+            f"(that would pay for a new clip). Check kie_tasks.json."
         )
     if pending:
         _persist_tasks(task_id, records)

@@ -38,6 +38,7 @@ from app.services import bgm as bgm_service
 from app.services.utils import video_effects
 from app.utils import file_security, utils
 
+
 class SubClippedVideoClip:
     def __init__(
         self,
@@ -80,8 +81,13 @@ _MIN_MATERIAL_DIMENSION = 480
 # 既能放行仅仅因为取整而略低于阈值的素材，也仍然能挡住真正的低清素材。
 _MIN_DIMENSION_TOLERANCE = 10
 _DEFAULT_VIDEO_CODEC = "libx264"
+_SOFTWARE_VIDEO_CODECS = (
+    "libx264",
+    "libopenh264",
+)
 _SUPPORTED_VIDEO_CODECS = (
     "libx264",
+    "libopenh264",
     "h264_nvenc",
     "h264_amf",
     "h264_qsv",
@@ -193,7 +199,7 @@ def _ffmpeg_encoder_exists(ffmpeg_binary: str, codec: str) -> bool:
     检查当前 FFmpeg 是否声明支持指定编码器。
 
     这只能证明 FFmpeg 编译时包含该 encoder，不能证明当前机器硬件和驱动
-    一定可用。因此实际编码失败时仍会再回退到 libx264。
+    一定可用。因此实际编码失败时仍会再回退到可用的软件编码器。
     """
     try:
         result = subprocess.run(
@@ -219,42 +225,57 @@ def _ffmpeg_encoder_exists(ffmpeg_binary: str, codec: str) -> bool:
     return codec in result.stdout
 
 
+def _get_software_fallback_codec() -> str:
+    """
+    当前 FFmpeg 上真正能用的软件 H.264 编码器。
+
+    默认策略仍是 libx264，但 Fedora ffmpeg-free 等构建只有 libopenh264。
+    这里按白名单探测，避免把不存在的 libx264 当成一定可用的兜底。
+    """
+    ffmpeg_binary = utils.get_ffmpeg_binary()
+    for codec in _SOFTWARE_VIDEO_CODECS:
+        if _ffmpeg_encoder_exists(ffmpeg_binary, codec):
+            return codec
+    return _DEFAULT_VIDEO_CODEC
+
+
 def _get_effective_video_codec(preferred_codec: str | None = None) -> str:
     """
     返回本次实际使用的视频编码器。
 
-    用户选择硬件编码器时，先做 FFmpeg encoder 列表检测；如果本进程里已经
-    实际编码失败过，也直接回退，避免一个任务里每个片段都重复失败。
+    即使用户选择（或默认）libx264，也必须先探测当前 FFmpeg 是否声明了
+    该编码器。硬件编码器不可用、或本进程里已经实际失败过时，回退到
+    当前二进制上存在的软件编码器，避免一个任务里每个片段都重复失败。
     """
     selected_codec = preferred_codec or _get_configured_video_codec()
-    if selected_codec == _DEFAULT_VIDEO_CODEC:
-        return _DEFAULT_VIDEO_CODEC
+    fallback_codec = _get_software_fallback_codec()
 
     if selected_codec in _runtime_disabled_video_codecs:
         logger.warning(
             f"video codec {selected_codec} was disabled after a runtime failure, "
-            f"fallback to {_DEFAULT_VIDEO_CODEC}"
+            f"fallback to {fallback_codec}"
         )
-        return _DEFAULT_VIDEO_CODEC
+        return fallback_codec
 
     ffmpeg_binary = utils.get_ffmpeg_binary()
-    if not _ffmpeg_encoder_exists(ffmpeg_binary, selected_codec):
+    if _ffmpeg_encoder_exists(ffmpeg_binary, selected_codec):
+        return selected_codec
+
+    if selected_codec != fallback_codec:
         logger.warning(
             f"ffmpeg encoder {selected_codec} is not available, "
-            f"fallback to {_DEFAULT_VIDEO_CODEC}"
+            f"fallback to {fallback_codec}"
         )
-        return _DEFAULT_VIDEO_CODEC
-
-    return selected_codec
+    return fallback_codec
 
 
 def _disable_runtime_video_codec(codec: str, reason: str):
-    if codec == _DEFAULT_VIDEO_CODEC:
+    fallback_codec = _get_software_fallback_codec()
+    if codec == fallback_codec:
         return
     _runtime_disabled_video_codecs.add(codec)
     logger.warning(
-        f"video codec {codec} failed, fallback to {_DEFAULT_VIDEO_CODEC}. "
-        f"reason: {reason}"
+        f"video codec {codec} failed, fallback to {fallback_codec}. reason: {reason}"
     )
 
 
@@ -276,32 +297,36 @@ def _get_temp_audio_dir(output_dir: str) -> str:
     return output_dir
 
 
-def _fallback_write_videofile(clip, output_file: str, failed_codec: str, reason: str, **kwargs):
+def _fallback_write_videofile(
+    clip, output_file: str, failed_codec: str, reason: str, **kwargs
+):
     """
-    硬件编码失败后用 libx264 重试，只有重试成功才禁用该硬件编码器。
+    硬件编码失败后用当前可用的软件编码器重试，只有重试成功才禁用该硬件编码器。
 
     Windows 上 FFmpeg 失败原因比较复杂：可能是显卡/驱动不支持，也可能是输出
-    文件被占用、目录权限、杀软拦截等通用 IO 问题。只有 libx264 能成功写出时，
+    文件被占用、目录权限、杀软拦截等通用 IO 问题。只有软件编码器能成功写出时，
     才能判断原始失败大概率来自硬件编码器本身，避免误伤后续任务。
     """
-    clip.write_videofile(output_file, codec=_DEFAULT_VIDEO_CODEC, **kwargs)
+    fallback_codec = _get_software_fallback_codec()
+    clip.write_videofile(output_file, codec=fallback_codec, **kwargs)
     _disable_runtime_video_codec(failed_codec, reason)
-    return _DEFAULT_VIDEO_CODEC
+    return fallback_codec
 
 
 def _write_videofile_with_codec_fallback(clip, output_file: str, codec: str, **kwargs):
     """
-    使用指定编码器写出视频，失败时自动用 libx264 重试一次。
+    使用指定编码器写出视频，失败时自动用当前可用的软件编码器重试一次。
 
     硬件编码器是否可用不仅取决于 FFmpeg，还取决于显卡、驱动和当前运行环境。
     生成任务不能因为高级编码器不可用而整体失败，所以这里把回退集中处理。
     """
     effective_codec = _get_effective_video_codec(codec)
+    fallback_codec = _get_software_fallback_codec()
     try:
         clip.write_videofile(output_file, codec=effective_codec, **kwargs)
         return effective_codec
     except Exception as exc:
-        if effective_codec == _DEFAULT_VIDEO_CODEC:
+        if effective_codec == fallback_codec:
             raise
         return _fallback_write_videofile(
             clip,
@@ -310,6 +335,71 @@ def _write_videofile_with_codec_fallback(clip, output_file: str, codec: str, **k
             reason=str(exc),
             **kwargs,
         )
+
+
+def normalize_audio_loudness(
+    video_file: str,
+    target_i: float = -14.0,
+    target_tp: float = -1.5,
+    target_lra: float = 11.0,
+    timeout: int = 600,
+) -> bool:
+    """
+    把成片音频拉到短视频平台的响度标准（默认 -14 LUFS）。
+
+    旁白 TTS + 低音量 BGM 混出来的成片普遍偏安静（实测 mean volume 约
+    -24 dB），在平台上会被明显压低存在感。这里用单遍 loudnorm 重编音频，
+    视频流直接 copy 不重编码。任何失败都保留原成片并返回 False，绝不能
+    让响度优化毁掉一条已经渲染完成的视频。
+    """
+    if not video_file or not os.path.isfile(video_file):
+        logger.warning(f"loudness normalize skipped, file not found: {video_file}")
+        return False
+
+    ffmpeg_binary = utils.get_ffmpeg_binary()
+    temp_output = f"{video_file}.loudnorm.mp4"
+    command = [
+        ffmpeg_binary,
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        video_file,
+        "-c:v",
+        "copy",
+        "-af",
+        f"loudnorm=I={target_i}:TP={target_tp}:LRA={target_lra}",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        temp_output,
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning(f"loudness normalize failed to run: {exc}")
+        if os.path.isfile(temp_output):
+            os.remove(temp_output)
+        return False
+
+    if result.returncode != 0 or not os.path.isfile(temp_output):
+        stderr_tail = (result.stderr or "").strip()[-500:]
+        logger.warning(f"loudness normalize failed, keeping original: {stderr_tail}")
+        if os.path.isfile(temp_output):
+            os.remove(temp_output)
+        return False
+
+    os.replace(temp_output, video_file)
+    logger.info(f"audio loudness normalized to {target_i} LUFS: {video_file}")
+    return True
 
 
 def _escape_ffmpeg_concat_path(file_path: str) -> str:
@@ -366,12 +456,14 @@ def concat_video_clips_with_ffmpeg(
     def run_concat(codec: str):
         command = build_command(codec)
         # 使用 ffmpeg 只做一次串联与编码，避免 MoviePy 逐段合并时反复重编码，
-        # 从而降低画质劣化与颜色偏移风险。
+        # 从而降低画质劣化与颜色偏移风险。任务管理只有一个并发槽，串联卡死
+        # 会让整个应用停摆，所以必须设超时（与其余编码调用保持一致）。
         result = subprocess.run(
             command,
             capture_output=True,
             text=True,
             check=False,
+            timeout=1800,
         )
         if result.returncode != 0:
             error_message = (result.stderr or result.stdout or "").strip()
@@ -380,12 +472,13 @@ def concat_video_clips_with_ffmpeg(
 
     try:
         effective_codec = _get_effective_video_codec()
+        fallback_codec = _get_software_fallback_codec()
         try:
             return run_concat(effective_codec)
         except Exception as exc:
-            if effective_codec == _DEFAULT_VIDEO_CODEC:
+            if effective_codec == fallback_codec:
                 raise
-            result_codec = run_concat(_DEFAULT_VIDEO_CODEC)
+            result_codec = run_concat(fallback_codec)
             _disable_runtime_video_codec(effective_codec, str(exc))
             return result_codec
     finally:
@@ -453,39 +546,40 @@ def _open_video_clip_quietly(video_path: str, audio: bool = False) -> VideoFileC
 def close_clip(clip):
     if clip is None:
         return
-        
+
     try:
         # close main resources
-        if hasattr(clip, 'reader') and clip.reader is not None:
+        if hasattr(clip, "reader") and clip.reader is not None:
             clip.reader.close()
-            
+
         # close audio resources
-        if hasattr(clip, 'audio') and clip.audio is not None:
-            if hasattr(clip.audio, 'reader') and clip.audio.reader is not None:
+        if hasattr(clip, "audio") and clip.audio is not None:
+            if hasattr(clip.audio, "reader") and clip.audio.reader is not None:
                 clip.audio.reader.close()
             del clip.audio
-            
+
         # close mask resources
-        if hasattr(clip, 'mask') and clip.mask is not None:
-            if hasattr(clip.mask, 'reader') and clip.mask.reader is not None:
+        if hasattr(clip, "mask") and clip.mask is not None:
+            if hasattr(clip.mask, "reader") and clip.mask.reader is not None:
                 clip.mask.reader.close()
             del clip.mask
-            
+
         # handle child clips in composite clips
-        if hasattr(clip, 'clips') and clip.clips:
+        if hasattr(clip, "clips") and clip.clips:
             for child_clip in clip.clips:
                 if child_clip is not clip:  # avoid possible circular references
                     close_clip(child_clip)
-            
+
         # clear clip list
-        if hasattr(clip, 'clips'):
+        if hasattr(clip, "clips"):
             clip.clips = []
-            
+
     except Exception as e:
         logger.error(f"failed to close clip: {str(e)}")
-    
+
     del clip
     gc.collect()
+
 
 def delete_files(files: List[str] | str):
     if isinstance(files, str):
@@ -518,9 +612,7 @@ def get_bgm_file(bgm_type: str = "random", bgm_file: str = ""):
         except ValueError as exc:
             # API 请求里的 bgm_file 来自用户输入，只允许解析到用户 BGM 或内置
             # 歌曲目录，阻止 MoviePy 读取配置、密钥等任意服务器文件。
-            logger.warning(
-                f"reject unsafe bgm file: {bgm_file}, error: {str(exc)}"
-            )
+            logger.warning(f"reject unsafe bgm file: {bgm_file}, error: {str(exc)}")
             return ""
         return resolved_bgm_file
 
@@ -587,7 +679,7 @@ def combine_videos(
         clip_duration = clip.duration
         clip_w, clip_h = clip.size
         close_clip(clip)
-        
+
         start_time = 0
 
         while start_time < clip_duration:
@@ -616,21 +708,21 @@ def combine_videos(
         subclipped_items=subclipped_items,
         concat_mode=video_concat_mode,
     )
-        
+
     logger.debug(f"total subclipped items: {len(subclipped_items)}")
-    
+
     # Add downloaded clips over and over until the duration of the audio (max_duration) has been reached
     for i, subclipped_item in enumerate(subclipped_items):
         if video_duration >= required_video_duration:
             break
-        
+
         logger.debug(
-            f"processing clip {i+1}: {subclipped_item.width}x{subclipped_item.height}, "
+            f"processing clip {i + 1}: {subclipped_item.width}x{subclipped_item.height}, "
             f"source: {os.path.basename(subclipped_item.source_file_path)}, "
             f"current duration: {video_duration:.2f}s, "
             f"remaining: {required_video_duration - video_duration:.2f}s"
         )
-        
+
         try:
             clip = _open_video_clip_quietly(subclipped_item.file_path).subclipped(
                 subclipped_item.start_time, subclipped_item.end_time
@@ -646,8 +738,10 @@ def combine_videos(
             if clip_w != video_width or clip_h != video_height:
                 clip_ratio = clip.w / clip.h
                 video_ratio = video_width / video_height
-                logger.debug(f"resizing clip, source: {clip_w}x{clip_h}, ratio: {clip_ratio:.2f}, target: {video_width}x{video_height}, ratio: {video_ratio:.2f}")
-                
+                logger.debug(
+                    f"resizing clip, source: {clip_w}x{clip_h}, ratio: {clip_ratio:.2f}, target: {video_width}x{video_height}, ratio: {video_ratio:.2f}"
+                )
+
                 if clip_ratio == video_ratio:
                     clip = clip.resized(new_size=(video_width, video_height))
                 else:
@@ -659,10 +753,14 @@ def combine_videos(
                     new_width = int(clip_w * scale_factor)
                     new_height = int(clip_h * scale_factor)
 
-                    background = ColorClip(size=(video_width, video_height), color=(0, 0, 0)).with_duration(clip_duration)
-                    clip_resized = clip.resized(new_size=(new_width, new_height)).with_position("center")
+                    background = ColorClip(
+                        size=(video_width, video_height), color=(0, 0, 0)
+                    ).with_duration(clip_duration)
+                    clip_resized = clip.resized(
+                        new_size=(new_width, new_height)
+                    ).with_position("center")
                     clip = CompositeVideoClip([background, clip_resized])
-                    
+
             shuffle_side = random.choice(["left", "right", "top", "bottom"])
             if transition_value in (None, VideoTransitionMode.none.value):
                 clip = clip
@@ -692,9 +790,9 @@ def combine_videos(
 
             if clip.duration > max_clip_duration:
                 clip = clip.subclipped(0, max_clip_duration)
-                
+
             # wirte clip to temp file
-            clip_file = f"{output_dir}/temp-clip-{i+1}.mp4"
+            clip_file = f"{output_dir}/temp-clip-{i + 1}.mp4"
             _write_videofile_with_codec_fallback(
                 clip,
                 clip_file,
@@ -717,10 +815,10 @@ def combine_videos(
                 )
             )
             video_duration += clip_duration_saved
-            
+
         except Exception as e:
             logger.error(f"failed to process clip: {str(e)}")
-    
+
     # loop processed clips until the video duration covers the audio duration and the small safety margin.
     if video_duration < required_video_duration:
         logger.warning(
@@ -736,15 +834,15 @@ def combine_videos(
         logger.info(
             f"video duration: {video_duration:.2f}s, audio duration: {audio_duration:.2f}s, "
             f"required duration: {required_video_duration:.2f}s, "
-            f"looped {len(processed_clips)-len(base_clips)} clips"
+            f"looped {len(processed_clips) - len(base_clips)} clips"
         )
-     
+
     # merge video clips progressively, avoid loading all videos at once to avoid memory overflow
     logger.info("starting clip merging process")
     if not processed_clips:
         logger.warning("no clips available for merging")
         return combined_video_path
-    
+
     clip_files = [clip.file_path for clip in processed_clips]
     logger.info(f"concatenating {len(clip_files)} clips with ffmpeg")
     concat_video_clips_with_ffmpeg(
@@ -754,10 +852,10 @@ def combine_videos(
         output_dir=output_dir,
         max_duration=audio_duration,
     )
-    
+
     # clean temp files
     delete_files(clip_files)
-            
+
     logger.info("video combining completed")
     return combined_video_path
 
@@ -1200,9 +1298,7 @@ def generate_video(
             video_clip = CompositeVideoClip([video_clip, *text_clips])
             clip_stack.callback(video_clip.close)
 
-        bgm_enabled = bgm_service.should_use_bgm(
-            params.bgm_type, params.bgm_volume
-        )
+        bgm_enabled = bgm_service.should_use_bgm(params.bgm_type, params.bgm_volume)
         if not bgm_enabled and params.bgm_type:
             # 所有 BGM 来源共用这一条短路规则。音量不大于 0 时不能解析随机或
             # 自定义文件，也不能加载提供商返回的文件，避免无意义的 IO 和混音。

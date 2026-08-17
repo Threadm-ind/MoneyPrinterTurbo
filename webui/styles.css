@@ -116,6 +116,34 @@ div[class*="st-key-voice_mode_control"] [role="radiogroup"] > button p {
     outline-offset: 2px;
 }
 
+/* streamlit_tour / Driver.js ships unstyled buttons. Without this, Tab
+   lands on Next / Previous / close with no visible focus ring. */
+.driver-popover-navigation-btns button:focus-visible,
+.driver-popover-close-btn:focus-visible {
+    outline: 2px solid rgba(255, 75, 75, 0.72);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3.2px rgba(255, 75, 75, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+    .driver-popover {
+        background: #1c1c1c;
+        color: #f2f2f2;
+        border: 1px solid #3a3a3a;
+    }
+
+    .driver-popover-title,
+    .driver-popover-description,
+    .driver-popover-description p {
+        color: #f2f2f2;
+    }
+
+    .driver-popover-navigation-btns button,
+    .driver-popover-close-btn {
+        color: #f2f2f2;
+    }
+}
+
 @media (prefers-color-scheme: dark) {
     .mpt-brand__update {
         color: #ff6b6b !important;

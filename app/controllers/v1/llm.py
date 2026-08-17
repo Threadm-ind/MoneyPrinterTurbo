@@ -1,5 +1,6 @@
-from fastapi import Request
+from fastapi import Depends, Request
 
+from app.controllers import base
 from app.controllers.v1.base import new_router
 from app.models.schema import (
     VideoScriptRequest,
@@ -13,8 +14,8 @@ from app.services import llm
 from app.utils import utils
 
 # authentication dependency
-# router = new_router(dependencies=[Depends(base.verify_token)])
-router = new_router()
+# api_key 配置为空时 verify_token 直接放行，所以这里可以无条件挂上。
+router = new_router(dependencies=[Depends(base.verify_token)])
 
 
 @router.post(
@@ -55,9 +56,7 @@ def generate_video_terms(request: Request, body: VideoTermsRequest):
     response_model=VideoSocialMetadataResponse,
     summary="Generate social publishing metadata",
 )
-def generate_video_social_metadata(
-    request: Request, body: VideoSocialMetadataRequest
-):
+def generate_video_social_metadata(request: Request, body: VideoSocialMetadataRequest):
     metadata = llm.generate_social_metadata(
         video_subject=body.video_subject,
         video_script=body.video_script,

@@ -503,6 +503,13 @@ def save_config():
                     f.write(serialized_config)
                     f.flush()
                     os.fsync(f.fileno())
+
+            # 配置文件含 API key。mkstemp 路径碰巧是 0600，但手工 cp 出来的
+            # 配置可能是 0644，且 EBUSY 回退路径会保留旧权限——统一显式收紧。
+            try:
+                os.chmod(config_file, 0o600)
+            except OSError as exc:
+                logger.warning(f"failed to tighten config file mode: {exc}")
             _cfg.clear()
             _cfg.update(config_to_save)
         finally:

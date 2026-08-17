@@ -505,6 +505,41 @@ def build_script_prompt(
     return prompt
 
 
+# CLI 订阅后端（grok/kimi 等）偶尔会在脚本前泄漏一句“我来写这个脚本”的
+# 过程说明。这句会被 TTS 原样读出来，毁掉成片开头几秒。判定必须同时满足
+# 两个条件：第一人称/客套开场 + 谈论“写脚本”这件事本身，避免误伤
+# “I'll show you how to check” 这类正常的口播开头。
+_META_PREAMBLE_OPENER = re.compile(
+    r"^(sure|okay|ok|of course|got it|certainly|absolutely|no problem|great|"
+    r"here('s| is)|i('ll| will| am|'m| have|'ve)|let('s| me)|"
+    r"as (requested|asked))\b",
+    re.IGNORECASE,
+)
+_META_PREAMBLE_TOPIC = re.compile(
+    r"\b(script|narration|narrat\w*|paragraphs?|voice rules?|spoken|"
+    r"word count|read aloud|writing|write th|draft)\b",
+    re.IGNORECASE,
+)
+
+
+def _strip_meta_preamble(text: str) -> str:
+    """去掉开头至多两句模型自述的过程说明；正文原样保留。"""
+    for _ in range(2):
+        stripped = text.lstrip()
+        match = re.match(r"[^.!?\n]{0,200}[.!?]", stripped)
+        if not match:
+            break
+        sentence = match.group(0)
+        if _META_PREAMBLE_OPENER.match(sentence) and _META_PREAMBLE_TOPIC.search(
+            sentence
+        ):
+            logger.warning(f"stripped meta preamble from script: {sentence!r}")
+            text = stripped[len(sentence) :]
+            continue
+        break
+    return text.strip()
+
+
 def generate_script(
     video_subject: str,
     language: str = "",
@@ -536,6 +571,9 @@ def generate_script(
     )
 
     def format_response(response):
+        # 先去掉泄漏的过程说明，再做 markdown 清理。
+        response = _strip_meta_preamble(response)
+
         # Clean the script
         # Remove asterisks, hashes
         response = response.replace("*", "")
@@ -705,6 +743,90 @@ Please note that you must use English for generating video search terms; Chinese
 
     logger.success(f"completed: \n{search_terms}")
     return search_terms
+
+
+def generate_scene_prompts(
+    video_subject: str,
+    video_script: str,
+    amount: int = 5,
+    app_config=None,
+) -> List[str]:
+    """
+    为生成式 b-roll 源（Grok Imagine / KIE）生成按脚本顺序的场景提示词。
+
+    检索类素材源用 1-3 个词的搜索关键词即可；但文生视频模型拿到几个近义
+    关键词会产出几段几乎一样的画面，成片看起来像一个静止镜头。这里改为
+    请 LLM 直接写出多样化的电影级场景描述，逐段跟随脚本叙事。失败时返回
+    空列表，由调用方回退到传统搜索关键词。
+    """
+    amount = max(1, int(amount))
+    prompt = f"""
+# Role: Cinematic B-roll Scene Director
+
+## Goals:
+Write {amount} text-to-video prompts for AI-generated b-roll clips that visually follow the narration of the video script below.
+
+## Constrains:
+1. return the prompts as a json-array of strings. you must not return anything else.
+2. each prompt is one sentence of 12 to 25 words describing ONE concrete visual scene: subject, setting, lighting, and camera movement.
+3. keep the prompts in the same order as the script narration; earlier prompts must illustrate earlier moments of the script.
+4. every scene must look clearly different from all the others: vary the location, main subject, framing (close-up, wide shot, aerial, macro, over-the-shoulder), and time of day. never describe the same object in the same setting twice.
+5. no on-screen text, captions, logos, watermarks, or brand names. no people talking to the camera; hands, silhouettes, and crowds are fine.
+6. reply with english prompts only.
+
+## Output Example:
+["a wide shot scene prompt", "a close-up scene prompt", "an aerial scene prompt"]
+
+## Context:
+### Video Subject
+{video_subject}
+
+### Video Script
+{video_script}
+
+Please note that you must use English for the prompts; Chinese is not accepted.
+""".strip()
+
+    logger.info(f"generating {amount} scene prompts for subject: {video_subject}")
+
+    scene_prompts = []
+    response = ""
+    for i in range(_max_retries):
+        try:
+            if app_config is None:
+                response = _generate_response(prompt)
+            else:
+                response = _generate_response(prompt, app_config=app_config)
+            if response.startswith("Error: "):
+                # 与 generate_terms 相同：Provider 的错误文案不能当结果返回，
+                # 否则下游会把非空字符串误判为成功。
+                logger.error(f"failed to generate scene prompts: {response}")
+                return []
+            scene_prompts = json.loads(_strip_code_fence(response))
+            if not isinstance(scene_prompts, list) or not all(
+                isinstance(p, str) for p in scene_prompts
+            ):
+                logger.error("response is not a list of strings.")
+                scene_prompts = []
+                continue
+        except Exception as e:
+            logger.warning(f"failed to generate scene prompts: {str(e)}")
+            if response:
+                match = re.search(r"\[.*]", response, re.DOTALL)
+                if match:
+                    try:
+                        scene_prompts = json.loads(match.group())
+                    except Exception as e:
+                        logger.warning(f"failed to generate scene prompts: {str(e)}")
+
+        scene_prompts = [str(p).strip() for p in scene_prompts if str(p).strip()]
+        if scene_prompts:
+            break
+        if i < _max_retries:
+            logger.warning(f"failed to generate scene prompts, trying again... {i + 1}")
+
+    logger.success(f"completed: \n{scene_prompts}")
+    return scene_prompts
 
 
 # =============================================================================

@@ -625,16 +625,36 @@ def save_video(video_url: str, save_dir: str = "") -> str:
     }
 
     # if video does not exist, download it
-    with open(video_path, "wb") as f:
-        f.write(
-            requests.get(
-                video_url,
-                headers=headers,
-                proxies=config.proxy,
-                verify=_get_tls_verify(),
-                timeout=(60, 240),
-            ).content
-        )
+    # 流式下载 + 大小上限：素材 URL 来自第三方 API，一次性 .content 会把
+    # 任意大的响应整体载入内存；异常响应不该能 OOM 掉整个任务进程。
+    if not str(video_url).lower().startswith(("http://", "https://")):
+        logger.error(f"refusing non-http material url: {video_url}")
+        return ""
+    max_bytes = 500 * 1024 * 1024
+    downloaded = 0
+    try:
+        with requests.get(
+            video_url,
+            headers=headers,
+            proxies=config.proxy,
+            verify=_get_tls_verify(),
+            timeout=(60, 240),
+            stream=True,
+        ) as response:
+            response.raise_for_status()
+            with open(video_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    downloaded += len(chunk)
+                    if downloaded > max_bytes:
+                        raise ValueError(
+                            f"material exceeds {max_bytes // (1024 * 1024)}MB cap"
+                        )
+                    f.write(chunk)
+    except Exception as e:
+        logger.error(f"failed to download material: {_redact_request_error(e)}")
+        if os.path.exists(video_path):
+            os.remove(video_path)
+        return ""
 
     if os.path.exists(video_path) and os.path.getsize(video_path) > 0:
         clip = None

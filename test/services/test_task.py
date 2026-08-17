@@ -435,6 +435,124 @@ class TestTaskService(unittest.TestCase):
             match_script_order=True,
         )
 
+    def test_generate_terms_upgrades_keywords_to_scene_prompts_for_imagine(self):
+        """
+        生成式素材源拿到近义搜索关键词会产出几段几乎一样的画面。任务层必须
+        把关键词升级为按脚本顺序的场景描述，且数量跟随片段预算配置。
+        """
+        params = VideoParams(
+            video_subject="old stock certificates",
+            video_source="imagine",
+            video_terms="old certificate, vintage certificate",
+        )
+        scenes = [f"distinct cinematic scene number {i}" for i in range(8)]
+
+        with (
+            patch.object(
+                tm.config.app,
+                "get",
+                side_effect=lambda k, d=None: 8 if k == "imagine_max_clips" else d,
+            ),
+            patch.object(
+                tm.llm, "generate_scene_prompts", return_value=scenes
+            ) as scene_gen,
+            patch.object(tm.llm, "generate_terms") as term_gen,
+        ):
+            result = tm.generate_terms("task-id", params, "the script")
+
+        self.assertEqual(result, scenes)
+        scene_gen.assert_called_once_with(
+            video_subject="old stock certificates",
+            video_script="the script",
+            amount=8,
+        )
+        term_gen.assert_not_called()
+
+    def test_generate_terms_keeps_user_scene_prompts_for_imagine(self):
+        """用户手工提供的场景级描述必须原样保留，不再让 LLM 重写。"""
+        long_terms = (
+            "a macro shot of an engraved certificate under warm lamp light, "
+            "an aerial view of a city financial district at dusk"
+        )
+        params = VideoParams(
+            video_subject="subject",
+            video_source="imagine",
+            video_terms=long_terms,
+        )
+
+        with patch.object(tm.llm, "generate_scene_prompts") as scene_gen:
+            result = tm.generate_terms("task-id", params, "the script")
+
+        self.assertEqual(len(result), 2)
+        self.assertIn("macro shot", result[0])
+        scene_gen.assert_not_called()
+
+    def test_generate_terms_falls_back_to_keywords_when_scenes_fail(self):
+        """场景提示词生成失败时必须回退到搜索关键词，任务不能中断。"""
+        params = VideoParams(
+            video_subject="subject",
+            video_source="imagine",
+            video_terms="",
+        )
+
+        with (
+            patch.object(tm.llm, "generate_scene_prompts", return_value=[]),
+            patch.object(
+                tm.llm, "generate_terms", return_value=["keyword"]
+            ) as term_gen,
+        ):
+            result = tm.generate_terms("task-id", params, "the script")
+
+        self.assertEqual(result, ["keyword"])
+        term_gen.assert_called_once()
+
+    def test_generate_terms_ignores_scene_prompts_for_stock_sources(self):
+        """检索类素材源继续使用短关键词，不触发场景提示词生成。"""
+        params = VideoParams(
+            video_subject="subject",
+            video_source="pexels",
+            video_terms="",
+        )
+
+        with (
+            patch.object(tm.llm, "generate_scene_prompts") as scene_gen,
+            patch.object(tm.llm, "generate_terms", return_value=["keyword"]),
+        ):
+            result = tm.generate_terms("task-id", params, "the script")
+
+        self.assertEqual(result, ["keyword"])
+        scene_gen.assert_not_called()
+
+    def test_generate_final_videos_normalizes_loudness_when_enabled(self):
+        """成片渲染后按配置执行响度标准化；关闭开关时必须跳过。"""
+        params = VideoParams(video_subject="test", video_count=1)
+
+        for enabled, expected_calls in ((True, 1), (False, 0)):
+            with self.subTest(enabled=enabled):
+                with (
+                    patch.object(tm.video, "combine_videos"),
+                    patch.object(tm.video, "generate_video"),
+                    patch.object(tm.video, "normalize_audio_loudness") as normalize,
+                    patch.object(tm.sm.state, "update_task"),
+                    patch.object(
+                        tm.config.app,
+                        "get",
+                        side_effect=lambda k, d=None: (
+                            enabled if k == "normalize_audio" else d
+                        ),
+                    ),
+                ):
+                    tm.generate_final_videos(
+                        task_id="loudnorm-task",
+                        params=params,
+                        downloaded_videos=["material.mp4"],
+                        audio_file="audio.mp3",
+                        subtitle_path="",
+                        audio_duration=5,
+                    )
+
+                self.assertEqual(normalize.call_count, expected_calls)
+
     def test_start_stops_before_materials_when_term_provider_fails(self):
         """
         关键词 Provider 失败后，任务必须立即结束，不能继续生成音频或下载素材。
